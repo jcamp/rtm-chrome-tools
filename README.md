@@ -12,7 +12,7 @@ This is an initial extension skeleton. It provides a popup with a test button, b
 2. Open `chrome://extensions` in Google Chrome.
 3. Enable **Developer mode**.
 4. Select **Load unpacked**.
-5. Select the folder containing `manifest.json`.
+5. Select the extracted folder containing `manifest.json` (not its parent folder).
 6. Optionally pin the extension using Chrome's Extensions menu.
 
 The extension is installed locally and does not require publication in the Chrome Web Store.
