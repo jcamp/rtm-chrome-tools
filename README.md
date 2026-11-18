@@ -1,68 +1,59 @@
 # RTM Chrome Tools
 
-A **very small Chrome extension skeleton** for future [Remember The Milk](https://www.rememberthemilk.com/) utilities.
+A lightweight Google Chrome extension for utilities that work with [Remember The Milk](https://www.rememberthemilk.com/).
 
-**Current version:** 0.1.0. The popup opens and its test button works. This version does **not** connect to Remember The Milk, access browser tabs, read tasks, or change anything in an RTM account.
+**Version:** 0.1.0
 
-## Design principles
+This is an initial extension skeleton. It provides a popup with a test button, but does not yet connect to Remember The Milk or access or modify tasks.
 
-- Keep the code simple and easy to understand.
-- Use plain HTML, CSS and JavaScript. No React, frameworks, build tools or dependencies.
-- Prefer small functions with clear names and comments.
-- Ask for Chrome permissions only when a feature genuinely needs them.
-- Preview changes before any future feature modifies RTM tasks.
-- Document every new feature and any installation changes.
+## Installation
+
+1. Select **Code → Download ZIP** on GitHub and extract the files.
+2. Open `chrome://extensions` in Google Chrome.
+3. Enable **Developer mode**.
+4. Select **Load unpacked**.
+5. Select the folder containing `manifest.json`.
+6. Optionally pin the extension using Chrome's Extensions menu.
+
+The extension is installed locally and does not require publication in the Chrome Web Store.
+
+## Usage
+
+Click the extension icon, then select **Test extension**.
+
+The message `Extension is working.` confirms that the popup and JavaScript are running.
+
+No Remember The Milk account or API credentials are required for this version.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `manifest.json` | Tells Chrome the extension's name, version and popup file. |
-| `popup.html` | Contains the user interface and its minimal CSS. |
-| `popup.js` | Handles button clicks and updates the status message. |
-| `README.md` | Installation and maintenance instructions. |
-| `AGENTS.md` | Development rules for future work, including AI-assisted edits. |
+| `manifest.json` | Chrome extension configuration. |
+| `popup.html` | Popup layout and basic styling. |
+| `popup.js` | Test button behaviour. |
+| `README.md` | Project documentation. |
+| `AGENTS.md` | Contributor and development guidance. |
+| `LICENSE` | MIT licence. |
 
-There are no directories or extra configuration files yet.
+The extension uses plain HTML and JavaScript with no build process or third-party dependencies.
 
-## Install in Chrome
+## Updating
 
-1. Download this project's files into a local folder, such as `rtm-chrome-tools`.
-2. Open `chrome://extensions` in Chrome.
-3. Switch on **Developer mode**.
-4. Click **Load unpacked**.
-5. Choose the folder containing `manifest.json`.
-6. Pin **RTM Chrome Tools** using Chrome's Extensions (puzzle piece) menu if desired.
-7. Click its icon and then **Test extension**. You should see `Extension is working.`
+For an extension installed using **Load unpacked**:
 
-The extension is installed locally. It does not need Chrome Web Store approval.
+1. Download or pull the updated project files into the same folder.
+2. Visit `chrome://extensions`.
+3. Select **Reload** for RTM Chrome Tools.
 
-## Make a change
+Changes made on GitHub are not automatically installed in Chrome.
 
-1. Edit `popup.html` or `popup.js` with a text editor.
-2. Open `chrome://extensions` and click the extension's **Reload** button.
-3. Open the popup again and test your change.
-4. Commit the change to GitHub with a descriptive commit message.
+## Troubleshooting
 
-An extension installed using **Load unpacked** reads files from the local folder. Updating GitHub does not automatically update the installed extension. Download or pull new changes to that folder and reload the extension.
-
-## Debugging
-
-To inspect popup errors, open the popup, right-click inside it and select **Inspect**. Check the **Console** tab. A red error usually points to the file and line number.
-
-Chrome extension popup windows close when they lose focus. This is normal.
-
-## Next step: RTM connection
-
-Only after this skeleton has been installed and tested:
-
-1. Add a small `rtm.js` module for communication with the official RTM API.
-2. Add a clear authorisation flow and request only the permissions required.
-3. Start with a **read-only** action, such as listing the user's RTM lists.
-4. Add a preview and explicit confirmation before any future tool modifies tasks.
-
-Do not put an RTM API key, shared secret or authentication token in GitHub source files. Keep credentials out of the repository.
+If the popup does not work, open it, right-click and select **Inspect**, then check the **Console** for errors.
 
 ## Licence
 
-MIT
+MIT. See [LICENSE](LICENSE).
+
+This project uses the Remember The Milk API but is not endorsed or certified by Remember The Milk.
