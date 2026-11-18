@@ -63,10 +63,6 @@ Only after this skeleton has been installed and tested:
 
 Do not put an RTM API key, shared secret or authentication token in GitHub source files. Keep credentials out of the repository.
 
-## Publishing to GitHub
-
-Create an empty repository named `rtm-chrome-tools`, then upload these five files to the repository root. If GitHub offers to add a README automatically, leave that option unticked because one is already supplied.
-
 ## Licence
 
-No licence has been chosen for this skeleton. Add one before inviting public reuse or contributions.
+MIT
