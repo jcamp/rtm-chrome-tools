@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "RTM Chrome Tools",
+  "version": "0.1.0",
+  "description": "A minimal starting point for Remember The Milk browser tools.",
+  "action": {
+    "default_title": "RTM Chrome Tools",
+    "default_popup": "popup.html"
+  }
+}
