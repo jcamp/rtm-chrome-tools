@@ -10,6 +10,15 @@ export function normaliseTags(value) {
     .map(name => String(name).trim()).filter(Boolean);
 }
 
+// RTM stores recurrence as an rrule on the task series.
+// JSON responses may represent it as a string or an object with attributes.
+export function hasRecurrence(series) {
+  const rule = series.rrule;
+  if (typeof rule === 'string') return rule.trim().length > 0;
+  if (!rule || typeof rule !== 'object') return false;
+  return Object.values(rule).some(value => value != null && String(value).trim() !== '');
+}
+
 // A task is identified by list, task series and task instance.
 // We retain the parent ID for future hierarchy inspection.
 export function tasksFromResponse(response, fallbackListId, expectedCompleted) {
@@ -30,6 +39,9 @@ export function tasksFromResponse(response, fallbackListId, expectedCompleted) {
         tasks.push({
           key, id, listId,
           name: String(series.name || '(untitled task)'),
+          // A recurrence rule belongs to the task series, not to its due date.
+          // Do not guess recurrence merely because a date is in the future.
+          recurring: hasRecurrence(series),
           tags: [...new Set(tags)],
           completed,
           due: String(task.due || ''),

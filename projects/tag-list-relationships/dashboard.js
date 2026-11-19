@@ -362,7 +362,7 @@ function renderTasks() {
 
   renderTable('tasks', sortTasks(matches).slice(0, 500).map(task => ({
     values: [
-      task.name + (task.parentId ? ' (subtask)' : ''),
+      (task.recurring ? '↻ ' : '') + task.name + (task.parentId ? ' (subtask)' : ''),
       task.completed ? 'Completed' : 'Incomplete',
       task.tags.join(', ') || '(none)',
       formatDueDate(task.due)
