@@ -8,7 +8,8 @@ import { analyse, tasksFromResponse } from './analysis.js';
 const el = id => document.getElementById(id);
 const state = {
   lists: [], tags: [], tasks: [], failures: [],
-  selected: null, completed: false, running: false
+  selected: null, completed: false, running: false,
+  sort: { field: 'name', descending: false }
 };
 
 function status(message) {
@@ -196,10 +197,51 @@ function formatDueDate(value) {
   }).format(date);
 }
 
+// Sort the currently selected tasks locally. No additional RTM requests.
+function sortTasks(tasks) {
+  const { field, descending } = state.sort;
+  const direction = descending ? -1 : 1;
+
+  function sortKey(task) {
+    if (field === 'completed') return task.completed ? 'completed' : 'incomplete';
+    if (field === 'tags') return task.tags.join(', ').toLowerCase();
+    if (field === 'due') {
+      const parts = formatDueDate(task.due).split('/');
+      return parts.length === 3 && parts[0].length === 2 && parts[1].length === 2
+        ? parts[2] + parts[1] + parts[0] : '';
+    }
+    return task.name.toLowerCase();
+  }
+
+  return tasks.map((task, index) => ({ task, index })).sort((a, b) => {
+    const left = sortKey(a.task);
+    const right = sortKey(b.task);
+    // Undated tasks always appear last.
+    if (field === 'due' && (!left || !right)) {
+      if (!left && !right) return a.index - b.index;
+      return left ? -1 : 1;
+    }
+    return direction * left.localeCompare(right, 'en-GB', { numeric: true }) || a.index - b.index;
+  }).map(item => item.task);
+}
+
+function updateSortHeaders() {
+  const titles = { name: 'Task', completed: 'Status', tags: 'Tags', due: 'Due' };
+  for (const button of document.querySelectorAll('#taskTable button[data-sort]')) {
+    const active = button.dataset.sort === state.sort.field;
+    button.closest('th').setAttribute('aria-sort', active ?
+      (state.sort.descending ? 'descending' : 'ascending') : 'none');
+    button.textContent = titles[button.dataset.sort] +
+      (active ? (state.sort.descending ? ' ▼' : ' ▲') : '');
+  }
+}
+
 function renderTasks() {
   clear('tasks');
+  updateSortHeaders();
   if (!state.selected) {
-    el('selection').textContent = 'Click a list or tag name above to inspect its tasks.';
+    el('selection').textContent = 'Nothing selected.';
+    el('taskCount').textContent = 'Click a list or tag name above to inspect its tasks.';
     return;
   }
 
@@ -214,20 +256,21 @@ function renderTasks() {
 
   const names = new Map(state.lists.map(item => [String(item.id), item.name]));
   const label = selection.type === 'list' ? names.get(selection.value) || selection.value : selection.value;
-  el('selection').textContent = label + ': ' + matches.length +
-    ' matching task instances' + (state.running ? ' (loading)' : '') +
+  el('selection').textContent = (selection.type === 'list' ? 'List: ' : 'Tag: ') + label;
+  el('taskCount').textContent = matches.length + ' matching task instances' +
+    (selection.type === 'tag' ? ' (across lists)' : '') +
+    (state.running ? ' (loading)' : '') +
     (state.failures.length ? ' (some requests failed)' : '');
 
-  renderTable('tasks', matches.slice(0, 500).map(task => ({
+  renderTable('tasks', sortTasks(matches).slice(0, 500).map(task => ({
     values: [
       task.name + (task.parentId ? ' (subtask)' : ''),
-      names.get(task.listId) || task.listId,
       task.completed ? 'Completed' : 'Incomplete',
       task.tags.join(', ') || '(none)',
       formatDueDate(task.due)
     ]
   })));
-  if (matches.length > 500) el('selection').textContent += '. First 500 displayed.';
+  if (matches.length > 500) el('taskCount').textContent += '. First 500 displayed.';
 }
 
 function addTasks(response, listId, completed) {
@@ -325,6 +368,15 @@ async function refresh() {
     el('refresh').disabled = false;
     el('showCompleted').disabled = false;
   }
+}
+
+for (const button of document.querySelectorAll('#taskTable button[data-sort]')) {
+  button.addEventListener('click', () => {
+    const field = button.dataset.sort;
+    state.sort.descending = state.sort.field === field ? !state.sort.descending : false;
+    state.sort.field = field;
+    renderTasks();
+  });
 }
 
 el('search').addEventListener('input', renderTasks);
