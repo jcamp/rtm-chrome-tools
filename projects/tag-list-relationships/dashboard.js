@@ -115,5 +115,7 @@ if (initial.token) {
     el('secret').value = pending.secret;
     el('authorised').hidden = false;
     status('Authorisation started. Approve access in RTM, then click "I\'ve authorised access".');
+  } else {
+    status('Ready to connect.');
   }
 }
