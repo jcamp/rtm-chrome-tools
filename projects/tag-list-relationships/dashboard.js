@@ -1,9 +1,15 @@
-// Read-only dashboard. All task analysis happens locally after RTM responds.
-import { startAuthorisation, finishAuthorisation, getLists, getTags, getTasksForList } from './rtm.js';
+// Read-only RTM analysis. Fast initial scan, with a reliable per-list fallback.
+import {
+  startAuthorisation, finishAuthorisation, getLists, getTags,
+  getTasksForList, getAllIncompleteTasks
+} from './rtm.js';
 import { analyse, tasksFromResponse } from './analysis.js';
 
 const el = id => document.getElementById(id);
-const state = { lists: [], tags: [], tasks: [], failures: [], selected: null, completed: true, running: false };
+const state = {
+  lists: [], tags: [], tasks: [], failures: [],
+  selected: null, completed: false, running: false
+};
 
 function status(message) {
   el('status').textContent = message;
@@ -27,7 +33,7 @@ function showConnection(data) {
 
 function node(tag, content) {
   const element = document.createElement(tag);
-  element.textContent = content;
+  element.textContent = String(content);
   return element;
 }
 
@@ -40,7 +46,7 @@ function renderTable(id, rows) {
   table.replaceChildren();
   for (const item of rows) {
     const tr = document.createElement('tr');
-    for (const value of item.values) tr.append(node('td', String(value)));
+    for (const value of item.values) tr.append(node('td', value));
     if (item.select) {
       tr.dataset.key = item.select;
       tr.tabIndex = 0;
@@ -57,119 +63,176 @@ function renderTable(id, rows) {
   }
 }
 
-// Count data is labelled unknown until the corresponding request succeeds.
 function renderOverview() {
-  const results = analyse(state.lists, state.tags, state.tasks, !state.failures.length);
-  const showCompleted = state.completed;
+  const validIncomplete = state.lists.every(list => list.loadedIncomplete);
+  const validCompleted = state.lists.every(list => list.loadedCompleted);
+  const results = analyse(state.lists, state.tags, state.tasks,
+    validIncomplete && (!state.completed || validCompleted));
+
   el('listCount').textContent = state.lists.length;
   el('tagCount').textContent = state.tags.length;
-  const failed = new Set(state.failures.map(item => item.listId + ':' + item.status));
-  function value(amount, unknown) {
-    return unknown ? '?' : amount;
-  }
 
   renderTable('lists', state.lists.map(list => {
-    const count = results.byList.get(String(list.id)) || { incomplete: 0, completed: 0 };
+    const counts = results.byList.get(String(list.id)) || { incomplete: 0, completed: 0 };
     return {
       select: 'list:' + list.id,
-      values: [list.name,
-        value(count.incomplete, !list.loadedIncomplete),
-        showCompleted ? value(count.completed, !list.loadedCompleted) : 'not scanned']
+      values: [list.name, list.loadedIncomplete ? counts.incomplete : '?',
+        state.completed ? (list.loadedCompleted ? counts.completed : '?') : 'not scanned']
     };
   }));
 
-  const unknownIncomplete = state.lists.some(list => !list.loadedIncomplete);
-  const unknownCompleted = showCompleted && state.lists.some(list => !list.loadedCompleted);
   renderTable('tags', state.tags.map(tag => {
-    const count = results.byTag.get(tag.toLowerCase()) || { incomplete: 0, completed: 0 };
+    const counts = results.byTag.get(tag.toLowerCase()) || { incomplete: 0, completed: 0 };
     return {
       select: 'tag:' + tag,
-      values: [tag,
-        value(count.incomplete, unknownIncomplete),
-        showCompleted ? value(count.completed, unknownCompleted) : 'not scanned']
+      values: [tag, validIncomplete ? counts.incomplete : '?',
+        state.completed ? (validCompleted ? counts.completed : '?') : 'not scanned']
     };
   }));
 
-  renderFindings(results, showCompleted && !unknownCompleted && !unknownIncomplete);
+  renderFindings(results, validIncomplete, validCompleted);
   renderTasks();
 }
 
-function renderFindings(results, allStatusesComplete) {
+function renderFindings(results, validIncomplete, validCompleted) {
   clear('suggestions');
   clear('emptyLists');
-  if (!allStatusesComplete) {
-    el('summary').textContent = 'Full findings are available after every list has been scanned successfully for both statuses. ' +
-      'Similar names can still be investigated manually in the tag table.';
+
+  if (!validIncomplete || (state.completed && !validCompleted)) {
+    el('summary').textContent = 'Some data is unavailable. Confirmed counts remain visible. ' +
+      'Full relationship findings need a successful scan of the selected statuses.';
     return;
   }
 
-  const unused = results.suggestions.filter(item => item.type === 'Unused tag').length;
-  const single = results.suggestions.filter(item => item.type === 'Single-task tag').length;
-  el('summary').textContent = state.tasks.length + ' task instances checked. ' +
-    results.untagged.length + ' untagged. ' + unused + ' unused tags. ' + single + ' single-task tags.';
+  const scope = state.completed ? 'incomplete and completed' : 'incomplete';
+  el('summary').textContent = state.tasks.length + ' ' + scope + ' task instances checked. ' +
+    results.untagged.length + ' untagged. Suggestions are based on ' + scope + ' tasks only.';
 
-  const suggestions = el('suggestions');
-  for (const suggestion of results.suggestions) {
-    const li = node('li', suggestion.type + ': ' + suggestion.tag + ' (' + suggestion.detail + ')');
-    suggestions.append(li);
+  const output = el('suggestions');
+  for (const item of results.suggestions) {
+    output.append(node('li', item.type + ': ' + item.tag + ' (' + item.detail + ')'));
   }
-  if (!results.suggestions.length) suggestions.append(node('li', 'No suggestions found.'));
+  if (!results.suggestions.length) output.append(node('li', 'No suggestions found.'));
 
-  let emptyCount = 0;
+  let found = false;
   for (const list of state.lists) {
-    const count = results.byList.get(String(list.id));
-    if (count && count.incomplete + count.completed === 0) {
+    const counts = results.byList.get(String(list.id));
+    if (counts && counts.incomplete === 0 && (!state.completed || counts.completed === 0)) {
       el('emptyLists').append(node('li', list.name));
-      emptyCount++;
+      found = true;
     }
   }
-  if (!emptyCount) el('emptyLists').append(node('li', 'None.'));
+  if (!found) el('emptyLists').append(node('li', 'None for the selected statuses.'));
 }
 
 function select(key) {
   const index = key.indexOf(':');
   state.selected = { type: key.slice(0, index), value: key.slice(index + 1) };
   renderTasks();
+  el('selection').scrollIntoView({ block: 'nearest' });
 }
 
 function renderTasks() {
   clear('tasks');
   if (!state.selected) {
-    el('selection').textContent = 'Nothing selected.';
+    el('selection').textContent = 'Click a list or tag name above to inspect its tasks.';
     return;
   }
 
-  const filter = el('search').value.trim().toLowerCase();
   const selection = state.selected;
+  const filter = el('search').value.trim().toLowerCase();
   const matches = state.tasks.filter(task => {
-    const selected = selection.type === 'list'
+    const belongs = selection.type === 'list'
       ? task.listId === selection.value
       : task.tags.some(tag => tag.toLowerCase() === selection.value.toLowerCase());
-    return selected && task.name.toLowerCase().includes(filter);
+    return belongs && task.name.toLowerCase().includes(filter);
   });
-  const listNames = new Map(state.lists.map(list => [String(list.id), list.name]));
-  el('selection').textContent = matches.length + ' loaded task instance(s) in ' + selection.type + ': ' +
-    (selection.type === 'list' ? listNames.get(selection.value) || selection.value : selection.value) +
-    '. Results may be partial while scanning or if requests failed.';
+
+  const names = new Map(state.lists.map(item => [String(item.id), item.name]));
+  const label = selection.type === 'list' ? names.get(selection.value) || selection.value : selection.value;
+  el('selection').textContent = label + ': ' + matches.length +
+    ' matching task instances' + (state.running ? ' (loading)' : '') +
+    (state.failures.length ? ' (some requests failed)' : '');
+
   renderTable('tasks', matches.slice(0, 500).map(task => ({
-    values: [task.name + (task.parentId ? ' (subtask)' : ''), listNames.get(task.listId) || task.listId,
-      task.completed ? 'Completed' : 'Incomplete', task.tags.join(', ') || '(none)', task.due || '']
+    values: [
+      task.name + (task.parentId ? ' (subtask)' : ''),
+      names.get(task.listId) || task.listId,
+      task.completed ? 'Completed' : 'Incomplete',
+      task.tags.join(', ') || '(none)',
+      task.due || ''
+    ]
   })));
-  if (matches.length > 500) el('selection').textContent += ' Showing the first 500 matches.';
+  if (matches.length > 500) el('selection').textContent += '. First 500 displayed.';
 }
 
-// Sequential API requests are deliberate. Partial results remain visible.
+function addTasks(response, listId, completed) {
+  const parsed = tasksFromResponse(response, listId, completed);
+  const existing = new Set(state.tasks.map(task => task.key));
+  for (const task of parsed) {
+    if (!existing.has(task.key)) {
+      state.tasks.push(task);
+      existing.add(task.key);
+    }
+  }
+}
+
+// Complete incomplete tasks in a single filtered request where possible.
+// Fall back to one list at a time only when that request fails.
+async function loadIncomplete(credentials) {
+  status('Loading incomplete tasks…');
+  try {
+    const response = await getAllIncompleteTasks(credentials);
+    addTasks(response, '', false);
+    for (const list of state.lists) list.loadedIncomplete = true;
+    renderOverview();
+    return;
+  } catch (error) {
+    status('Full incomplete-task request failed. Trying smaller lists individually…');
+  }
+
+  for (let i = 0; i < state.lists.length; i++) {
+    const list = state.lists[i];
+    status('Loading incomplete tasks: ' + (i + 1) + '/' + state.lists.length +
+      ' (' + list.name + ')');
+    try {
+      addTasks(await getTasksForList(credentials, list.id, false), list.id, false);
+      list.loadedIncomplete = true;
+    } catch (error) {
+      state.failures.push({ listId: String(list.id), status: 'incomplete', message: error.message });
+    }
+    renderOverview();
+  }
+}
+
+// Completed history is optional, because large old histories can cause 502s.
+async function loadCompleted(credentials) {
+  for (let i = 0; i < state.lists.length; i++) {
+    const list = state.lists[i];
+    status('Optional completed history: ' + (i + 1) + '/' + state.lists.length +
+      ' (' + list.name + ')');
+    try {
+      addTasks(await getTasksForList(credentials, list.id, true), list.id, true);
+      list.loadedCompleted = true;
+    } catch (error) {
+      state.failures.push({ listId: String(list.id), status: 'completed', message: error.message });
+    }
+    renderOverview();
+  }
+}
+
 async function refresh() {
   if (state.running) return;
   state.running = true;
   el('refresh').disabled = true;
   el('showCompleted').disabled = true;
-  status('Loading regular lists…');
+  status('Loading list and tag names…');
 
   try {
-    const data = await settings();
-    const lists = await getLists(data);
-    const tags = await getTags(data);
+    const credentials = await settings();
+    // Keep independent metadata reads separate from the potentially expensive task read.
+    const lists = await getLists(credentials);
+    const tags = await getTags(credentials);
     state.lists = lists.sort((a, b) => a.name.localeCompare(b.name))
       .map(list => ({ ...list, loadedIncomplete: false, loadedCompleted: false }));
     state.tags = [...new Set(tags)].sort((a, b) => a.localeCompare(b));
@@ -178,36 +241,21 @@ async function refresh() {
     state.completed = el('showCompleted').checked;
     renderOverview();
 
-    for (let i = 0; i < state.lists.length; i++) {
-      const list = state.lists[i];
-      const statuses = state.completed ? [false, true] : [false];
-      for (const completed of statuses) {
-        const label = completed ? 'completed' : 'incomplete';
-        status('Reading ' + label + ' tasks: list ' + (i + 1) + ' of ' + state.lists.length +
-          ' (' + list.name + ')');
-        try {
-          const response = await getTasksForList(data, list.id, completed);
-          state.tasks.push(...tasksFromResponse(response, list.id, completed));
-          if (completed) list.loadedCompleted = true;
-          else list.loadedIncomplete = true;
-        } catch (error) {
-          state.failures.push({ listId: String(list.id), status: label, message: error.message });
-        }
-        renderOverview();
-      }
-    }
+    await loadIncomplete(credentials);
+    if (state.completed) await loadCompleted(credentials);
 
     if (state.failures.length) {
       status('Partial analysis. ' + state.failures.length + ' request(s) failed:\n' +
         state.failures.map(item => {
           const list = state.lists.find(x => String(x.id) === item.listId);
           return (list?.name || item.listId) + ' (' + item.status + '): ' + item.message;
-        }).join('\n') + '\nRefresh to try again.');
+        }).join('\n') + '\nRefresh to retry.');
     } else {
-      status('Scan complete. ' + state.tasks.length + ' task instances retrieved. No RTM tasks were changed.');
+      status('Analysis complete. ' + state.tasks.length +
+        ' task instances loaded. No RTM tasks were changed.');
     }
   } catch (error) {
-    status('Unable to start analysis: ' + error.message);
+    status('Could not refresh: ' + error.message);
   } finally {
     state.running = false;
     el('refresh').disabled = false;

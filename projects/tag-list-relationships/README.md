@@ -1,6 +1,6 @@
 # Tag & List Relationships
 
-**Version:** 0.2.0, Stage 1 read-only analysis.
+**Version:** 0.2.1, Stage 1 read-only analysis.
 
 A Chrome extension for inspecting Remember The Milk's regular lists, tags and task relationships. This is an early test build and has not yet been verified against a representative RTM account.
 
@@ -19,17 +19,17 @@ The API key, shared secret and token are stored in Chrome's local extension stor
 
 ## Analysis
 
-The dashboard displays alphabetical regular lists (not Smart Lists), tags and separate incomplete/completed instance counts. Each list is retrieved sequentially, with a separate request for each status. Completed-task scanning can be switched off, in which case completed counts say *not scanned*. A failed request leaves that count unknown (`?`) rather than claiming zero. Tag counts are unknown if any required list request failed.
+The dashboard displays alphabetical regular lists (not Smart Lists), tags and separate incomplete/completed instance counts. Incomplete tasks are fetched with one filtered API request for speed. If it fails, the extension retries by regular list, one at a time. Completed-task scanning is **off by default** because historical requests can be very slow or fail. You can explicitly enable it, at which point completed tasks are retrieved by regular list. A failed request leaves that count unknown (`?`) rather than claiming zero. Tag counts are unknown if any required list request failed.
 
 Select a list or tag to inspect matching loaded tasks. The search field filters task names and the inspector displays up to 500 matching instances. It shows completion status, assigned tags, due date and a marker when RTM returns a parent task ID. The API returns task series and task instances separately, so recurring instances can be counted individually. Subtask and completed-history coverage must be verified with real RTM data.
 
-When all incomplete and completed requests have succeeded, the tool identifies unused tags, single-task tags, tags confined to one list, numbered similar tag names, untagged task counts and empty regular lists. **Suggestions are not automatic merge instructions.** If a request fails, findings needing full coverage are withheld.
+When all requested statuses have been retrieved successfully, the tool identifies unused tags, single-task tags, tags confined to one list, numbered similar tag names, untagged task counts and empty regular lists. **Suggestions are not automatic merge instructions.** If a request fails, findings needing full coverage are withheld.
 
 The extension is **read-only**. It does not merge tags, move tasks, alter lists or modify RTM data.
 
 ## Reliability
 
-A transient HTTP 502 response is retried once for the API's read methods. Requests run sequentially by list and status, prioritising reliability over speed. Refresh fetches everything again. Partial results remain visible, with the failed list and status displayed.
+A transient HTTP 502 response is retried once for read methods. The normal incomplete-task scan is one filtered request. Only if that fails does the extension fall back to sequential per-list requests. Completed history is optional, sequential and may be much slower. The task counts shown for tags and findings describe only the statuses actually scanned. Refresh fetches everything again. Partial results remain visible, with the failed list and status displayed.
 
 ## Files
 
@@ -50,8 +50,18 @@ A transient HTTP 502 response is retried once for the API's read methods. Reques
 - Direct, reliable deep links to individual RTM tasks have not been confirmed, so none are fabricated.
 - Only the first 500 matches are displayed in the inspector.
 - Tag counts cover returned RTM task instances, not necessarily distinct task titles.
-- Deeply nested subtasks, recurring history and completed-task API coverage require real-account validation.
+- Deeply nested subtasks, recurring history and completed-task API coverage require real-account validation. Any tag listed as having no matching tasks is not necessarily unused in completed history unless that history was scanned.
 - No exported reports or remembered suggestion exclusions yet.
+
+## Local parser tests
+
+The parser has dependency-free tests using sample RTM responses. Run:
+
+```sh
+node --experimental-default-type=module --test tests/analysis.test.mjs
+```
+
+These tests validate basic counting, completion-state handling and duplicate avoidance. They are not a substitute for a live API test.
 
 ## Licence
 

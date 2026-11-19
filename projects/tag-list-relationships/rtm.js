@@ -54,6 +54,12 @@ export async function getTasksForList(credentials, listId, completed) {
   return result;
 }
 
+// One filtered request is much faster than one request for every list.
+// RTM's completed history is deliberately excluded.
+export async function getAllIncompleteTasks(credentials) {
+  return call('rtm.tasks.getList', { filter: 'status:incomplete' }, credentials);
+}
+
 export async function getTags(credentials) {
   const result = await call('rtm.tags.getList', {}, credentials);
   return toArray(result.tags?.tag).map(tag => typeof tag === 'string' ? tag : tag.name).filter(Boolean);

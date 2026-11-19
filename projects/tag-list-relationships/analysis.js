@@ -62,7 +62,7 @@ export function analyse(lists, tags, tasks, complete) {
   for (const tag of tags) {
     const entry = byTag.get(tag.toLowerCase());
     const total = (entry?.incomplete || 0) + (entry?.completed || 0);
-    if (total === 0) tagSuggestions.push({ type: 'Unused tag', tag, detail: 'No tasks found' });
+    if (total === 0) tagSuggestions.push({ type: 'No matching tasks', tag, detail: 'No matching tasks in the selected statuses' });
     if (total === 1) tagSuggestions.push({ type: 'Single-task tag', tag, detail: 'Used by 1 task' });
     if (entry?.lists.size === 1 && total) {
       const list = lists.find(item => String(item.id) === [...entry.lists][0]);
