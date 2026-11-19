@@ -9,6 +9,7 @@ Each extension lives in its own folder and can be installed independently. The r
 | Extension | Description |
 | --- | --- |
 | [RTM Chrome Tools starter](projects/rtm-chrome-tools/) | Initial working test popup. Does not connect to RTM or change tasks. |
+| [Tag & List Relationships](projects/tag-list-relationships/) | Read-only RTM lists and tags dashboard (initial version). |
 
 ## Reusable skeleton
 
