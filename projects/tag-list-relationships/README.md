@@ -1,6 +1,6 @@
 # Tag & List Relationships
 
-**Version:** 0.2.8, Stage 1 read-only analysis.
+**Version:** 0.2.9, Stage 1 read-only analysis.
 
 A Chrome extension for inspecting Remember The Milk's regular lists, tags and task relationships. This is an early test build and has not yet been verified against a representative RTM account.
 
@@ -23,7 +23,7 @@ The dashboard displays regular lists (not Smart Lists), tags and separate incomp
 
 Select a list or tag to inspect matching loaded tasks. The Task Inspector now has a searchable list/tag field with built-in suggestions, so you can switch directly between any loaded list or tag without returning to the overview. Enter a full list/tag name or choose a suggestion. If a list and tag share the same name, use the prefixed List: or Tag: suggestion. The existing task-name filter remains independent. The selection is displayed as a heading above the inspector, so the List column is omitted. Click Task, Status, Tags or Due to sort results. Clicking again reverses the order. Dates sort chronologically, with undated tasks last. The search field filters task names and the inspector displays up to 500 matching instances. Recurring tasks are marked with ↻ beside the task name, using the recurrence rule returned by RTM rather than the due date. It shows completion status, assigned tags, due date in UK day/month/year format (without time), and a marker when RTM returns a parent task ID. The API returns task series and task instances separately, so recurring instances can be counted individually. Subtask and completed-history coverage must be verified with real RTM data.
 
-When all requested statuses have been retrieved successfully, the tool identifies unused tags, single-task tags, tags confined to one list, numbered similar tag names, untagged task counts and empty regular lists. The findings are displayed in separate tables for similar names, single-task tags, tags used within one list and tags without matching tasks. **Suggestions are not automatic merge instructions.** If a request fails, findings needing full coverage are withheld.
+When all requested statuses have been retrieved successfully, the tool identifies unused tags, single-task tags, tags confined to one list, numbered similar tag names, untagged task counts and empty regular lists. The first three findings sections are sortable tables, each limited to 320 pixels tall with a fixed header. Click a tag or list name in those tables to open its tasks in the Task Inspector. Similar-name groups offer separate links for each tag. Tags without matching tasks are instead shown as a compact comma-separated list with direct links to their RTM tag pages. **Suggestions are not automatic merge instructions.** If a request fails, findings needing full coverage are withheld.
 
 The extension is **read-only**. It does not merge tags, move tasks, alter lists or modify RTM data.
 

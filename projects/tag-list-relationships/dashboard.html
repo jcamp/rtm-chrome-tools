@@ -14,6 +14,14 @@
     th{background:#eee}tr[data-key]{cursor:pointer}tr[data-key]:hover{background:#f0f5fa}tr[data-key] td:first-child{color:#175994;text-decoration:underline}
     .rtm-link{display:inline-block;margin-left:5px;font-size:14px;text-decoration:none;color:#175994}
     .rtm-link:hover,.rtm-link:focus{text-decoration:underline}
+    /* Keep findings compact, sortable and easy to inspect. */
+    .finding-scroll{max-height:320px;overflow-y:auto;border:1px solid #ddd}
+    .finding-scroll th{position:sticky;top:0;z-index:1}
+    .finding-scroll th button{border:0;background:none;padding:0;font:inherit;font-weight:bold;cursor:pointer;text-align:left}
+    .finding-scroll td,.finding-scroll th{overflow-wrap:anywhere}
+    .finding-link{border:0;background:none;padding:0;font:inherit;color:#175994;text-decoration:underline;cursor:pointer;text-align:left}
+    .unmatched-tags{line-height:1.8}
+    .unmatched-tags a{color:#175994}
     /* Keep the inspector inside the page and reserve most space for task names. */
     #taskTable{table-layout:fixed}
     #taskTable th:nth-child(1){width:56%}

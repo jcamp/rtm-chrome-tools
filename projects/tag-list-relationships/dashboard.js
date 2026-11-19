@@ -13,6 +13,11 @@ const state = {
   overviewSort: {
     list: { field: 'name', descending: false },
     tag: { field: 'name', descending: false }
+  },
+  findingSort: {
+    similar: { field: 'names', descending: false },
+    singleTask: { field: 'tag', descending: false },
+    singleList: { field: 'tag', descending: false }
   }
 };
 
@@ -170,10 +175,110 @@ function renderOverview() {
   renderTasks();
 }
 
+// Findings share one compact table design and sort entirely in memory.
+function sortFindingRows(rows, order) {
+  return [...rows].sort((a, b) => {
+    const left = a[order.field];
+    const right = b[order.field];
+    if (left == null || right == null) {
+      if (left == null && right == null) return 0;
+      return left == null ? 1 : -1;
+    }
+    const comparison = typeof left === 'number' && typeof right === 'number'
+      ? left - right
+      : String(left).localeCompare(String(right), 'en-GB', { numeric: true });
+    return (order.descending ? -1 : 1) * comparison ||
+      String(a.tag || a.names || '').localeCompare(String(b.tag || b.names || ''), 'en-GB');
+  });
+}
+
+function inspectorLink(label, key) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'finding-link';
+  button.textContent = label;
+  button.title = 'Show tasks in the Task Inspector';
+  button.addEventListener('click', () => select(key));
+  return button;
+}
+
+function renderFindingTable(parent, group) {
+  if (!group.rows.length) return;
+  const section = document.createElement('section');
+  section.append(node('h4', group.title + ' (' + group.rows.length + ')'));
+  const box = document.createElement('div');
+  box.className = 'finding-scroll';
+  box.tabIndex = 0;
+  box.setAttribute('role', 'region');
+  box.setAttribute('aria-label', group.title);
+  const table = document.createElement('table');
+  const header = document.createElement('tr');
+  const thead = document.createElement('thead');
+  const tbody = document.createElement('tbody');
+  const order = state.findingSort[group.id];
+
+  function drawRows() {
+    tbody.replaceChildren();
+    for (const item of sortFindingRows(group.rows, order)) {
+      const row = document.createElement('tr');
+      for (const [field] of group.columns) {
+        const cell = document.createElement('td');
+        if (field === 'names') {
+          item.tags.forEach((tag, index) => {
+            if (index) cell.append(', ');
+            cell.append(inspectorLink(tag, 'tag:' + tag));
+          });
+        } else if (field === 'tag') {
+          cell.append(inspectorLink(item.tag, 'tag:' + item.tag));
+        } else if (field === 'list') {
+          if (item.listId) cell.append(inspectorLink(item.list, 'list:' + item.listId));
+          else cell.textContent = item.list;
+        } else {
+          cell.textContent = item[field] == null ? 'not scanned' : String(item[field]);
+        }
+        row.append(cell);
+      }
+      tbody.append(row);
+    }
+  }
+
+  function updateHeadings() {
+    for (const button of header.querySelectorAll('button')) {
+      const active = button.dataset.field === order.field;
+      button.textContent = button.dataset.title +
+        (active ? (order.descending ? ' ▼' : ' ▲') : '');
+      button.closest('th').setAttribute('aria-sort', active ?
+        (order.descending ? 'descending' : 'ascending') : 'none');
+    }
+  }
+
+  for (const [field, label] of group.columns) {
+    const th = document.createElement('th');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.field = field;
+    button.dataset.title = label;
+    button.addEventListener('click', () => {
+      order.descending = order.field === field ? !order.descending : false;
+      order.field = field;
+      drawRows();
+      updateHeadings();
+    });
+    th.append(button);
+    header.append(th);
+  }
+  thead.append(header);
+  table.append(thead, tbody);
+  box.append(table);
+  section.append(box);
+  parent.append(section);
+  drawRows();
+  updateHeadings();
+}
+
 function renderFindings(results, validIncomplete, validCompleted) {
   clear('suggestions');
   clear('emptyLists');
-
   if (!validIncomplete || (state.completed && !validCompleted)) {
     el('summary').textContent = 'Some data is unavailable. Confirmed counts remain visible. ' +
       'Full relationship findings need a successful scan of the selected statuses.';
@@ -184,65 +289,72 @@ function renderFindings(results, validIncomplete, validCompleted) {
   el('summary').textContent = state.tasks.length + ' ' + scope + ' task instances checked. ' +
     results.untagged.length + ' untagged. Suggestions are based on ' + scope + ' tasks only.';
 
-  // Separate categories into readable tables instead of one long bullet list.
+  const suggestions = results.suggestions;
+  const counts = tag => results.byTag.get(tag.toLowerCase());
+  const completed = count => state.completed ? count?.completed || 0 : null;
   const groups = [
-    { type: 'Similar names', columns: ['Tags to review'], values: item => [item.detail] },
-    { type: 'Single-task tag', columns: ['Tag', 'Incomplete', 'Completed'], values: item => {
-      const count = results.byTag.get(item.tag.toLowerCase());
-      return [item.tag, count?.incomplete || 0, state.completed ? count?.completed || 0 : 'not scanned'];
-    } },
-    { type: 'Single-list tag', columns: ['Tag', 'List', 'Incomplete', 'Completed'], values: item => {
-      const count = results.byTag.get(item.tag.toLowerCase());
-      const listId = count ? [...count.lists][0] : '';
-      const listName = state.lists.find(list => String(list.id) === listId)?.name || '';
-      return [item.tag, listName, count?.incomplete || 0, state.completed ? count?.completed || 0 : 'not scanned'];
-    } },
-    { type: 'No matching tasks', columns: ['Tag'], values: item => [item.tag] }
+    {
+      id: 'similar', title: 'Similar tag names', columns: [['names', 'Tags to review']],
+      rows: [...new Set(suggestions.filter(item => item.type === 'Similar names').map(item => item.detail))]
+        .map(names => ({ names, tags: names.split(', ').filter(Boolean) }))
+    },
+    {
+      id: 'singleTask', title: 'Tags used by one task',
+      columns: [['tag', 'Tag'], ['incomplete', 'Incomplete'], ['completed', 'Completed']],
+      rows: suggestions.filter(item => item.type === 'Single-task tag').map(item => ({
+        tag: item.tag, incomplete: counts(item.tag)?.incomplete || 0,
+        completed: completed(counts(item.tag))
+      }))
+    },
+    {
+      id: 'singleList', title: 'Tags used in one list',
+      columns: [['tag', 'Tag'], ['list', 'List'], ['incomplete', 'Incomplete'], ['completed', 'Completed']],
+      rows: suggestions.filter(item => item.type === 'Single-list tag').map(item => {
+        const count = counts(item.tag);
+        const listId = count ? [...count.lists][0] : '';
+        const list = state.lists.find(entry => String(entry.id) === listId);
+        return {
+          tag: item.tag, listId: list ? String(list.id) : '',
+          list: list?.name || '', incomplete: count?.incomplete || 0,
+          completed: completed(count)
+        };
+      })
+    }
   ];
 
-  const headings = {
-    'Similar names': 'Similar tag names',
-    'Single-task tag': 'Tags used by one task',
-    'Single-list tag': 'Tags used in one list',
-    'No matching tasks': 'Tags without matching tasks'
-  };
-
   const output = el('suggestions');
-  let displayed = 0;
-  for (const group of groups) {
-    let items = results.suggestions.filter(item => item.type === group.type);
-    // Similar names are already presented as a group in the detail field.
-    if (group.type === 'Similar names') {
-      items = items.filter((item, index, array) =>
-        array.findIndex(other => other.detail === item.detail) === index);
-    }
-    if (!items.length) continue;
+  for (const group of groups) renderFindingTable(output, group);
 
+  // No matching tasks means there is nothing to inspect in the current scan.
+  // Show these as a compact group of direct RTM links instead of a tall table.
+  const unmatched = suggestions.filter(item => item.type === 'No matching tasks')
+    .map(item => item.tag).sort((a, b) => a.localeCompare(b, 'en-GB', { numeric: true }));
+  if (unmatched.length) {
     const section = document.createElement('section');
-    const heading = node('h4', headings[group.type] + ' (' + items.length + ')');
-    const table = document.createElement('table');
-    const thead = document.createElement('thead');
-    const headingRow = document.createElement('tr');
-    for (const column of group.columns) headingRow.append(node('th', column));
-    thead.append(headingRow);
-    table.append(thead);
-    const tbody = document.createElement('tbody');
-    for (const item of items) {
-      const row = document.createElement('tr');
-      for (const value of group.values(item)) row.append(node('td', value));
-      tbody.append(row);
-    }
-    table.append(tbody);
-    section.append(heading, table);
+    section.append(node('h4', 'Tags without matching tasks (' + unmatched.length + ')'));
+    const paragraph = document.createElement('p');
+    paragraph.className = 'unmatched-tags';
+    unmatched.forEach((tag, index) => {
+      if (index) paragraph.append(', ');
+      const link = document.createElement('a');
+      link.href = rtmWebUrl('tag:' + tag);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = tag;
+      link.title = 'Open tag in Remember The Milk';
+      paragraph.append(link);
+    });
+    section.append(paragraph);
     output.append(section);
-    displayed += items.length;
   }
-  if (!displayed) output.append(node('p', 'No relationships suggested.'));
+  if (!groups.some(group => group.rows.length) && !unmatched.length) {
+    output.append(node('p', 'No relationships suggested.'));
+  }
 
   let found = false;
   for (const list of state.lists) {
-    const counts = results.byList.get(String(list.id));
-    if (counts && counts.incomplete === 0 && (!state.completed || counts.completed === 0)) {
+    const count = results.byList.get(String(list.id));
+    if (count && count.incomplete === 0 && (!state.completed || count.completed === 0)) {
       el('emptyLists').append(node('li', list.name));
       found = true;
     }
