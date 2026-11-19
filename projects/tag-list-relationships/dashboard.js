@@ -46,12 +46,37 @@ function clear(id) {
   el(id).replaceChildren();
 }
 
+// RTM web app routes supplied by the user. Encode tag names for the URL.
+function rtmWebUrl(key) {
+  const split = key.indexOf(':');
+  const type = key.slice(0, split);
+  const value = key.slice(split + 1);
+  if (type === 'list') return 'https://www.rememberthemilk.com/app/#list/' + encodeURIComponent(value);
+  if (type === 'tag') return 'https://www.rememberthemilk.com/app/#tag/' +
+    encodeURIComponent(value.toLowerCase());
+  return '';
+}
+
 function renderTable(id, rows) {
   const table = el(id);
   table.replaceChildren();
   for (const item of rows) {
     const tr = document.createElement('tr');
     for (const value of item.values) tr.append(node('td', value));
+    if (item.externalUrl) {
+      // Add an independent link within the first cell of each overview row.
+      const link = document.createElement('a');
+      link.href = item.externalUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.className = 'rtm-link';
+      link.textContent = '↗';
+      link.title = 'Open ' + item.values[0] + ' in Remember The Milk';
+      link.setAttribute('aria-label', link.title);
+      link.addEventListener('click', event => event.stopPropagation());
+      link.addEventListener('keydown', event => event.stopPropagation());
+      tr.firstElementChild.append(' ', link);
+    }
     if (item.select) {
       tr.dataset.key = item.select;
       tr.tabIndex = 0;
@@ -131,10 +156,12 @@ function renderOverview() {
   const completedValue = value => !state.completed ? 'not scanned' : value ?? '?';
   renderTable('lists', sortOverviewRows(listRows, 'list').map(row => ({
     select: row.key,
+    externalUrl: rtmWebUrl(row.key),
     values: [row.name, row.incomplete ?? '?', completedValue(row.completed)]
   })));
   renderTable('tags', sortOverviewRows(tagRows, 'tag').map(row => ({
     select: row.key,
+    externalUrl: rtmWebUrl(row.key),
     values: [row.name, row.incomplete ?? '?', completedValue(row.completed)]
   })));
 
