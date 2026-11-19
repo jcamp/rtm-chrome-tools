@@ -2,7 +2,7 @@
 
 A read-only Chrome extension for browsing the lists and tags in a Remember The Milk account.
 
-**Version:** 0.1.3. The extension currently retrieves regular list names and tag names, both sorted alphabetically. Smart Lists are excluded because they are saved searches rather than task storage lists. It does not calculate task counts, merge tags or change tasks.
+**Version:** 0.1.4. The extension retrieves regular lists and tags alphabetically, with the number of incomplete tasks beside each. Smart Lists are excluded because they are saved searches rather than task storage lists. It does not calculate task counts, merge tags or change tasks.
 
 ## Installation
 
@@ -21,6 +21,12 @@ A read-only Chrome extension for browsing the lists and tags in a Remember The M
 5. Your lists and tags should appear. Use **Refresh** to fetch them again.
 
 **Important:** You need an API key and shared secret for an RTM application. Neither is provided in this repository.
+
+## Task counts
+
+Counts show **incomplete tasks**, including subtasks. Each task is counted once for its list and once for each tag assigned to it. An untagged task contributes to its list count but not to any tag count. Recurring task instances are counted separately when incomplete.
+
+The extension reads tasks with the RTM `rtm.tasks.getList` API using `status:incomplete`, so counts require one additional API request on each refresh. It does not change any tasks. Completed tasks are not included.
 
 ## Files
 
@@ -41,7 +47,7 @@ The API key, shared secret and token are stored in `chrome.storage.local` so the
 
 An unfinished authorisation is stored temporarily in Chrome session storage so you can close and reopen the dashboard. Once authorisation succeeds, the credentials are stored locally. If Chrome ends the session before you finish, begin authorisation again.
 
-The current list/tag view has no task counts and does not inspect tasks or completed-task history. This first version needs a live test with an RTM account.
+The counts do not include completed-task history. The extension still needs testing against an RTM account with nested subtasks and recurring tasks.
 
 The dashboard checks for an existing connection before showing the sign-in form, avoiding a brief sign-in screen on repeat visits.
 

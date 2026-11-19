@@ -1,5 +1,5 @@
 // Read-only dashboard. Credentials are saved in this browser's extension storage.
-import { startAuthorisation, finishAuthorisation, getLists, getTags } from './rtm.js';
+import { startAuthorisation, finishAuthorisation, getLists, getTags, getIncompleteTasks } from './rtm.js';
 
 const el = id => document.getElementById(id);
 function status(message) {
@@ -34,13 +34,38 @@ function showItems(id, items) {
   }
 }
 
+// Count each incomplete task once per list and once per distinct tag.
+function countTasks(tasks) {
+  const lists = new Map();
+  const tags = new Map();
+
+  for (const task of tasks) {
+    lists.set(task.listId, (lists.get(task.listId) || 0) + 1);
+    for (const tag of new Set(task.tags.map(name => name.toLocaleLowerCase()))) {
+      tags.set(tag, (tags.get(tag) || 0) + 1);
+    }
+  }
+  return { lists, tags };
+}
+
 async function refresh() {
   status('Loading lists and tags…');
   try {
     const data = await settings();
-    const [lists, tags] = await Promise.all([getLists(data), getTags(data)]);
-    showItems('lists', lists.map(list => list.name).sort((a, b) => a.localeCompare(b)));
-    showItems('tags', tags.sort((a, b) => a.localeCompare(b)));
+    const [lists, tags, tasks] = await Promise.all([
+      getLists(data), getTags(data), getIncompleteTasks(data)
+    ]);
+    const counts = countTasks(tasks);
+
+    const listNames = lists.map(list =>
+      list.name + ' (' + (counts.lists.get(String(list.id)) || 0) + ')'
+    );
+    const tagNames = tags.map(tag =>
+      tag + ' (' + (counts.tags.get(tag.toLocaleLowerCase()) || 0) + ')'
+    );
+    // Sort by names, not their displayed counts.
+    showItems('lists', listNames.sort((a, b) => a.localeCompare(b)));
+    showItems('tags', tagNames.sort((a, b) => a.localeCompare(b)));
     el('listCount').textContent = lists.length;
     el('tagCount').textContent = tags.length;
     status('Updated. Read-only: no tasks were changed.');
