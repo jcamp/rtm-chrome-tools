@@ -12,6 +12,10 @@
     label{display:block;margin:12px 0}label input{display:block;max-width:420px;width:100%;box-sizing:border-box}
     table{width:100%;border-collapse:collapse}th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #ddd}
     th{background:#eee}tr[data-key]{cursor:pointer}tr[data-key]:hover{background:#f0f5fa}tr[data-key] td:first-child{color:#175994;text-decoration:underline}
+    /* Simple in-page navigation, without taking permanent screen space. */
+    .jump-nav{display:flex;flex-wrap:wrap;gap:16px;padding:10px 0;border-bottom:1px solid #ddd}
+    .section-links{display:flex;justify-content:flex-end;gap:16px;margin:12px 0 20px}
+    .jump-nav a,.section-links a{color:#175994}
     .rtm-link{display:inline-block;margin-left:5px;font-size:14px;text-decoration:none;color:#175994}
     .rtm-link:hover,.rtm-link:focus{text-decoration:underline}
     /* Keep findings compact, sortable and easy to inspect. */
@@ -30,6 +34,8 @@
     #taskTable th:nth-child(4){width:10%}
     #taskTable th button{border:0;background:none;padding:0;font:inherit;font-weight:bold;cursor:pointer;text-align:left}
     #taskTable td{overflow-wrap:anywhere}
+    #taskTable .parent-context{font-size:12px;color:#555;margin-top:3px}
+    #taskTable .recurrence-mark{color:#555;white-space:nowrap}
     #taskTable td:last-child{white-space:nowrap;overflow-wrap:normal}
     /* Lists and tags scroll independently, keeping Findings close to the top. */
     .overview-scroll{max-height:320px;overflow-y:auto;border:1px solid #ddd}
@@ -46,7 +52,13 @@
   </style>
 </head>
 <body>
+  <div id="top"></div>
   <h1>Tag & List Relationships</h1>
+  <nav class="jump-nav" aria-label="Jump to dashboard section">
+    <a href="#overview">Lists &amp; Tags</a>
+    <a href="#findings">Findings</a>
+    <a href="#inspector">Task Inspector</a>
+  </nav>
   <p class="muted">Read-only analysis of regular RTM lists and tags. Nothing is modified.</p>
   <section id="setup" hidden>
     <h2>Connect to Remember The Milk</h2>
@@ -66,7 +78,7 @@
       <label style="margin:0"><input id="showCompleted" type="checkbox" style="display:inline;width:auto"> Include completed history (slow)</label>
     </div>
     <p class="small muted">Incomplete tasks load first. Completed history is optional and may take much longer. A ? means the count has not been verified.</p>
-    <div class="two">
+    <div id="overview" class="two">
       <section><h2>Regular lists (<span id="listCount">0</span>)</h2>
         <div class="overview-scroll" role="region" aria-label="Scrollable regular lists" tabindex="0">
           <table id="listTable"><thead><tr>
@@ -86,7 +98,11 @@
         </div>
       </section>
     </div>
-    <h2>Findings</h2>
+    <nav class="section-links" aria-label="After lists and tags">
+      <a href="#top">Back to top ↑</a>
+      <a href="#findings">Findings ↓</a>
+    </nav>
+    <h2 id="findings">Findings</h2>
     <p id="summary" class="small muted">No analysis yet.</p>
     <section>
       <h3>Possible tag relationships</h3>
@@ -97,7 +113,11 @@
       <h3>Lists with no matching tasks</h3>
       <ul id="emptyLists"></ul>
     </section>
-    <h2>Task inspector</h2>
+    <nav class="section-links" aria-label="After findings">
+      <a href="#top">Back to top ↑</a>
+      <a href="#inspector">Task Inspector ↓</a>
+    </nav>
+    <h2 id="inspector">Task Inspector</h2>
     <p class="small muted">Choose a list or tag here, or click one in the tables above. Then filter its tasks.</p>
     <div class="inspector-controls">
       <label for="target">List or tag
@@ -111,13 +131,17 @@
     <p id="targetMessage" class="small muted" role="status"></p>
     <h3 id="selection">Nothing selected.</h3>
     <p id="taskCount" class="small muted"></p>
-    <p class="small muted">↻ Recurring task</p>
+    <p class="small muted">↻ Recurring task. Subtasks show their parent underneath the task name.</p>
     <table id="taskTable"><thead><tr>
       <th aria-sort="ascending"><button type="button" data-sort="name">Task ▲</button></th>
       <th aria-sort="none"><button type="button" data-sort="completed">Status</button></th>
       <th aria-sort="none"><button type="button" data-sort="tags">Tags</button></th>
       <th aria-sort="none"><button type="button" data-sort="due">Due</button></th>
     </tr></thead><tbody id="tasks"></tbody></table>
+    <nav class="section-links" aria-label="After task inspector">
+      <a href="#top">Back to top ↑</a>
+      <a href="#findings">Findings ↑</a>
+    </nav>
   </section>
   <p id="status" role="status" aria-live="polite">Loading saved connection…</p>
   <script type="module" src="dashboard.js"></script>

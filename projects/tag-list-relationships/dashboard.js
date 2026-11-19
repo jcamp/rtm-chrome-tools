@@ -68,6 +68,24 @@ function renderTable(id, rows) {
   for (const item of rows) {
     const tr = document.createElement('tr');
     for (const value of item.values) tr.append(node('td', value));
+    if (item.parentContext !== undefined) {
+      // Render task hierarchy without changing the task's sortable name.
+      const taskCell = tr.firstElementChild;
+      taskCell.replaceChildren();
+      const name = node('span', item.taskName);
+      taskCell.append(name);
+      if (item.recurring) {
+        const mark = node('span', ' ↻');
+        mark.className = 'recurrence-mark';
+        mark.title = 'Recurring task';
+        taskCell.append(mark);
+      }
+      if (item.parentContext) {
+        const context = node('div', 'Under: ' + item.parentContext);
+        context.className = 'parent-context';
+        taskCell.append(context);
+      }
+    }
     if (item.externalUrl) {
       // Add an independent link within the first cell of each overview row.
       const link = document.createElement('a');
@@ -473,6 +491,31 @@ function updateSortHeaders() {
   }
 }
 
+// Build a readable parent path from the task IDs already loaded.
+// A missing parent is reported rather than guessing its title.
+// The seen set also prevents malformed parent cycles from blocking the UI.
+function parentContext(task, lookup) {
+  if (!task.parentId) return '';
+  const path = [];
+  const seen = new Set([task.id]);
+  let parentId = task.parentId;
+  while (parentId) {
+    if (seen.has(parentId)) {
+      path.unshift('(circular parent reference)');
+      break;
+    }
+    seen.add(parentId);
+    const parent = lookup.get(task.listId + ':' + parentId);
+    if (!parent) {
+      path.unshift('(parent not in loaded tasks)');
+      break;
+    }
+    path.unshift(parent.name);
+    parentId = parent.parentId;
+  }
+  return path.join(' › ');
+}
+
 function renderTasks() {
   clear('tasks');
   updateSortHeaders();
@@ -499,9 +542,13 @@ function renderTasks() {
     (state.running ? ' (loading)' : '') +
     (state.failures.length ? ' (some requests failed)' : '');
 
+  const lookup = new Map(state.tasks.map(task => [task.listId + ':' + task.id, task]));
   renderTable('tasks', sortTasks(matches).slice(0, 500).map(task => ({
+    taskName: task.name,
+    recurring: task.recurring,
+    parentContext: parentContext(task, lookup),
     values: [
-      (task.recurring ? '↻ ' : '') + task.name + (task.parentId ? ' (subtask)' : ''),
+      task.name,
       task.completed ? 'Completed' : 'Incomplete',
       task.tags.join(', ') || '(none)',
       formatDueDate(task.due)
