@@ -21,7 +21,13 @@
     #taskTable th button{border:0;background:none;padding:0;font:inherit;font-weight:bold;cursor:pointer;text-align:left}
     #taskTable td{overflow-wrap:anywhere}
     #taskTable td:last-child{white-space:nowrap;overflow-wrap:normal}
-    .two{display:grid;grid-template-columns:1fr 1fr;gap:24px}#status{white-space:pre-wrap}
+    /* Lists and tags scroll independently, keeping Findings close to the top. */
+    .overview-scroll{max-height:320px;overflow-y:auto;border:1px solid #ddd}
+    .overview-scroll table{width:100%}
+    .overview-scroll th{position:sticky;top:0;z-index:1}
+    .overview-scroll th button{border:0;background:none;padding:0;font:inherit;font-weight:bold;cursor:pointer;text-align:left}
+    .overview-scroll th:not(:first-child),.overview-scroll td:not(:first-child){text-align:right}
+    .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}#status{white-space:pre-wrap}
     [hidden]{display:none!important}a{overflow-wrap:anywhere}
     @media(max-width:760px){.two{grid-template-columns:1fr}}
   </style>
@@ -49,10 +55,22 @@
     <p class="small muted">Incomplete tasks load first. Completed history is optional and may take much longer. A ? means the count has not been verified.</p>
     <div class="two">
       <section><h2>Regular lists (<span id="listCount">0</span>)</h2>
-        <table><thead><tr><th>List</th><th>Incomplete</th><th>Completed</th></tr></thead><tbody id="lists"></tbody></table>
+        <div class="overview-scroll" role="region" aria-label="Scrollable regular lists" tabindex="0">
+          <table id="listTable"><thead><tr>
+            <th aria-sort="ascending"><button type="button" data-overview-sort="list" data-field="name">List ▲</button></th>
+            <th aria-sort="none"><button type="button" data-overview-sort="list" data-field="incomplete">Incomplete</button></th>
+            <th aria-sort="none"><button type="button" data-overview-sort="list" data-field="completed">Completed</button></th>
+          </tr></thead><tbody id="lists"></tbody></table>
+        </div>
       </section>
       <section><h2>Tags (<span id="tagCount">0</span>)</h2>
-        <table><thead><tr><th>Tag</th><th>Incomplete</th><th>Completed</th></tr></thead><tbody id="tags"></tbody></table>
+        <div class="overview-scroll" role="region" aria-label="Scrollable tags" tabindex="0">
+          <table id="tagTable"><thead><tr>
+            <th aria-sort="ascending"><button type="button" data-overview-sort="tag" data-field="name">Tag ▲</button></th>
+            <th aria-sort="none"><button type="button" data-overview-sort="tag" data-field="incomplete">Incomplete</button></th>
+            <th aria-sort="none"><button type="button" data-overview-sort="tag" data-field="completed">Completed</button></th>
+          </tr></thead><tbody id="tags"></tbody></table>
+        </div>
       </section>
     </div>
     <h2>Findings</h2>

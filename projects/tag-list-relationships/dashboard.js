@@ -9,7 +9,11 @@ const el = id => document.getElementById(id);
 const state = {
   lists: [], tags: [], tasks: [], failures: [],
   selected: null, completed: false, running: false,
-  sort: { field: 'name', descending: false }
+  sort: { field: 'name', descending: false },
+  overviewSort: {
+    list: { field: 'name', descending: false },
+    tag: { field: 'name', descending: false }
+  }
 };
 
 function status(message) {
@@ -64,6 +68,38 @@ function renderTable(id, rows) {
   }
 }
 
+// The two overview tables have independent sort selections.
+// Unknown or unscanned counts always remain at the end.
+function sortOverviewRows(rows, type) {
+  const { field, descending } = state.overviewSort[type];
+  return rows.sort((a, b) => {
+    const left = field === 'name' ? a.name : a[field];
+    const right = field === 'name' ? b.name : b[field];
+    if (left == null || right == null) {
+      if (left == null && right == null) return a.name.localeCompare(b.name, 'en-GB');
+      return left == null ? 1 : -1;
+    }
+    const comparison = field === 'name'
+      ? String(left).localeCompare(String(right), 'en-GB', { numeric: true })
+      : Number(left) - Number(right);
+    return (descending ? -1 : 1) * comparison ||
+      a.name.localeCompare(b.name, 'en-GB', { numeric: true });
+  });
+}
+
+function updateOverviewHeaders() {
+  const titles = { name: { list: 'List', tag: 'Tag' }, incomplete: 'Incomplete', completed: 'Completed' };
+  for (const button of document.querySelectorAll('button[data-overview-sort]')) {
+    const type = button.dataset.overviewSort;
+    const current = state.overviewSort[type];
+    const active = button.dataset.field === current.field;
+    const title = button.dataset.field === 'name' ? titles.name[type] : titles[button.dataset.field];
+    button.textContent = title + (active ? (current.descending ? ' ▼' : ' ▲') : '');
+    button.closest('th').setAttribute('aria-sort', active ?
+      (current.descending ? 'descending' : 'ascending') : 'none');
+  }
+}
+
 function renderOverview() {
   const validIncomplete = state.lists.every(list => list.loadedIncomplete);
   const validCompleted = state.lists.every(list => list.loadedCompleted);
@@ -73,24 +109,35 @@ function renderOverview() {
   el('listCount').textContent = state.lists.length;
   el('tagCount').textContent = state.tags.length;
 
-  renderTable('lists', state.lists.map(list => {
-    const counts = results.byList.get(String(list.id)) || { incomplete: 0, completed: 0 };
+  const listRows = state.lists.map(list => {
+    const count = results.byList.get(String(list.id)) || { incomplete: 0, completed: 0 };
     return {
-      select: 'list:' + list.id,
-      values: [list.name, list.loadedIncomplete ? counts.incomplete : '?',
-        state.completed ? (list.loadedCompleted ? counts.completed : '?') : 'not scanned']
+      name: list.name,
+      key: 'list:' + list.id,
+      incomplete: list.loadedIncomplete ? count.incomplete : null,
+      completed: state.completed && list.loadedCompleted ? count.completed : null
     };
-  }));
-
-  renderTable('tags', state.tags.map(tag => {
-    const counts = results.byTag.get(tag.toLowerCase()) || { incomplete: 0, completed: 0 };
+  });
+  const tagRows = state.tags.map(tag => {
+    const count = results.byTag.get(tag.toLowerCase()) || { incomplete: 0, completed: 0 };
     return {
-      select: 'tag:' + tag,
-      values: [tag, validIncomplete ? counts.incomplete : '?',
-        state.completed ? (validCompleted ? counts.completed : '?') : 'not scanned']
+      name: tag,
+      key: 'tag:' + tag,
+      incomplete: validIncomplete ? count.incomplete : null,
+      completed: state.completed && validCompleted ? count.completed : null
     };
-  }));
+  });
+  const completedValue = value => !state.completed ? 'not scanned' : value ?? '?';
+  renderTable('lists', sortOverviewRows(listRows, 'list').map(row => ({
+    select: row.key,
+    values: [row.name, row.incomplete ?? '?', completedValue(row.completed)]
+  })));
+  renderTable('tags', sortOverviewRows(tagRows, 'tag').map(row => ({
+    select: row.key,
+    values: [row.name, row.incomplete ?? '?', completedValue(row.completed)]
+  })));
 
+  updateOverviewHeaders();
   renderFindings(results, validIncomplete, validCompleted);
   renderTasks();
 }
@@ -227,7 +274,18 @@ function sortTasks(tasks) {
 
 function updateSortHeaders() {
   const titles = { name: 'Task', completed: 'Status', tags: 'Tags', due: 'Due' };
-  for (const button of document.querySelectorAll('#taskTable button[data-sort]')) {
+  for (const button of document.querySelectorAll('button[data-overview-sort]')) {
+  button.addEventListener('click', () => {
+    const type = button.dataset.overviewSort;
+    const field = button.dataset.field;
+    const current = state.overviewSort[type];
+    current.descending = current.field === field ? !current.descending : false;
+    current.field = field;
+    renderOverview();
+  });
+}
+
+for (const button of document.querySelectorAll('#taskTable button[data-sort]')) {
     const active = button.dataset.sort === state.sort.field;
     button.closest('th').setAttribute('aria-sort', active ?
       (state.sort.descending ? 'descending' : 'ascending') : 'none');

@@ -1,6 +1,6 @@
 # Tag & List Relationships
 
-**Version:** 0.2.4, Stage 1 read-only analysis.
+**Version:** 0.2.5, Stage 1 read-only analysis.
 
 A Chrome extension for inspecting Remember The Milk's regular lists, tags and task relationships. This is an early test build and has not yet been verified against a representative RTM account.
 
@@ -19,7 +19,7 @@ The API key, shared secret and token are stored in Chrome's local extension stor
 
 ## Analysis
 
-The dashboard displays alphabetical regular lists (not Smart Lists), tags and separate incomplete/completed instance counts. Incomplete tasks are fetched with one filtered API request for speed. If it fails, the extension retries by regular list, one at a time. Completed-task scanning is **off by default** because historical requests can be very slow or fail. You can explicitly enable it, at which point completed tasks are retrieved by regular list. A failed request leaves that count unknown (`?`) rather than claiming zero. Tag counts are unknown if any required list request failed.
+The dashboard displays regular lists (not Smart Lists), tags and separate incomplete/completed instance counts. Both overview tables have clickable List/Tag, Incomplete and Completed headings to sort in either direction, independently. Unknown and unscanned counts always sort last. Each table scrolls within a fixed-height area so Findings stays close to the top of the page. Incomplete tasks are fetched with one filtered API request for speed. If it fails, the extension retries by regular list, one at a time. Completed-task scanning is **off by default** because historical requests can be very slow or fail. You can explicitly enable it, at which point completed tasks are retrieved by regular list. A failed request leaves that count unknown (`?`) rather than claiming zero. Tag counts are unknown if any required list request failed.
 
 Select a list or tag to inspect matching loaded tasks. The selection is displayed as a heading above the inspector, so the List column is omitted. Click Task, Status, Tags or Due to sort results. Clicking again reverses the order. Dates sort chronologically, with undated tasks last. The search field filters task names and the inspector displays up to 500 matching instances. It shows completion status, assigned tags, due date in UK day/month/year format (without time), and a marker when RTM returns a parent task ID. The API returns task series and task instances separately, so recurring instances can be counted individually. Subtask and completed-history coverage must be verified with real RTM data.
 
