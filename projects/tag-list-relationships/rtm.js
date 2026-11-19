@@ -35,7 +35,8 @@ export async function finishAuthorisation(frob, credentials) {
 
 export async function getLists(credentials) {
   const result = await call('rtm.lists.getList', {}, credentials);
-  return toArray(result.lists?.list).filter(list => list.deleted !== '1');
+  // Smart Lists are saved searches, not physical lists containing tasks.
+  return toArray(result.lists?.list).filter(list => list.deleted !== '1' && list.smart !== '1');
 }
 
 export async function getTags(credentials) {

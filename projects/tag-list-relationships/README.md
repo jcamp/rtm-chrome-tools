@@ -2,7 +2,7 @@
 
 A read-only Chrome extension for browsing the lists and tags in a Remember The Milk account.
 
-**Version:** 0.1.2. The extension currently retrieves list names and tag names. It does not calculate task counts, merge tags or change tasks.
+**Version:** 0.1.3. The extension currently retrieves regular list names and tag names, both sorted alphabetically. Smart Lists are excluded because they are saved searches rather than task storage lists. It does not calculate task counts, merge tags or change tasks.
 
 ## Installation
 

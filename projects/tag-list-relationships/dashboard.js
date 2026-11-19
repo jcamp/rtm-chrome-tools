@@ -39,7 +39,7 @@ async function refresh() {
   try {
     const data = await settings();
     const [lists, tags] = await Promise.all([getLists(data), getTags(data)]);
-    showItems('lists', lists.map(list => list.name + (list.smart === '1' ? ' (Smart List)' : '')));
+    showItems('lists', lists.map(list => list.name).sort((a, b) => a.localeCompare(b)));
     showItems('tags', tags.sort((a, b) => a.localeCompare(b)));
     el('listCount').textContent = lists.length;
     el('tagCount').textContent = tags.length;
