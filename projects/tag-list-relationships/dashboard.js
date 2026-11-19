@@ -181,6 +181,21 @@ function select(key) {
   el('selection').scrollIntoView({ block: 'nearest' });
 }
 
+// RTM timestamps are UTC. Show the calendar date in the user's UK timezone.
+// Date-only values are already calendar dates, so do not shift them.
+function formatDueDate(value) {
+  if (!value) return '';
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-');
+    return day + '/' + month + '/' + year;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/London'
+  }).format(date);
+}
+
 function renderTasks() {
   clear('tasks');
   if (!state.selected) {
@@ -209,7 +224,7 @@ function renderTasks() {
       names.get(task.listId) || task.listId,
       task.completed ? 'Completed' : 'Incomplete',
       task.tags.join(', ') || '(none)',
-      task.due || ''
+      formatDueDate(task.due)
     ]
   })));
   if (matches.length > 500) el('selection').textContent += '. First 500 displayed.';

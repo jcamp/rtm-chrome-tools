@@ -12,6 +12,15 @@
     label{display:block;margin:12px 0}label input{display:block;max-width:420px;width:100%;box-sizing:border-box}
     table{width:100%;border-collapse:collapse}th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #ddd}
     th{background:#eee}tr[data-key]{cursor:pointer}tr[data-key]:hover{background:#f0f5fa}tr[data-key] td:first-child{color:#175994;text-decoration:underline}
+    /* Keep the inspector inside the page and reserve most space for task names. */
+    #taskTable{table-layout:fixed}
+    #taskTable th:nth-child(1){width:48%}
+    #taskTable th:nth-child(2){width:13%}
+    #taskTable th:nth-child(3){width:11%}
+    #taskTable th:nth-child(4){width:18%}
+    #taskTable th:nth-child(5){width:10%}
+    #taskTable td{overflow-wrap:anywhere}
+    #taskTable td:last-child{white-space:nowrap;overflow-wrap:normal}
     .two{display:grid;grid-template-columns:1fr 1fr;gap:24px}#status{white-space:pre-wrap}
     [hidden]{display:none!important}a{overflow-wrap:anywhere}
     @media(max-width:760px){.two{grid-template-columns:1fr}}
@@ -61,7 +70,7 @@
     <p class="small muted">Click a list or tag name above to view its tasks. Search within the selected results.</p>
     <input id="search" placeholder="Filter task names" aria-label="Filter tasks">
     <p id="selection" class="small muted">Nothing selected.</p>
-    <table><thead><tr><th>Task</th><th>List</th><th>Status</th><th>Tags</th><th>Due</th></tr></thead><tbody id="tasks"></tbody></table>
+    <table id="taskTable"><thead><tr><th>Task</th><th>List</th><th>Status</th><th>Tags</th><th>Due</th></tr></thead><tbody id="tasks"></tbody></table>
   </section>
   <p id="status" role="status" aria-live="polite">Loading saved connection…</p>
   <script type="module" src="dashboard.js"></script>
