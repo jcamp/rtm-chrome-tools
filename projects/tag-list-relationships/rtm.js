@@ -13,8 +13,13 @@ export async function call(method, params, credentials) {
   const values = { ...params, method, api_key: credentials.apiKey, format: 'json', v: '2' };
   if (credentials.token) values.auth_token = credentials.token;
   values.api_sig = sign(values, credentials.secret);
-  const response = await fetch(API, { method: 'POST', body: new URLSearchParams(values) });
-  if (!response.ok) throw new Error('RTM HTTP error ' + response.status);
+  // Retry a transient gateway failure once. Never retry task-changing operations.
+  let response = await fetch(API, { method: 'POST', body: new URLSearchParams(values) });
+  if (response.status === 502 && ['rtm.tasks.getList', 'rtm.lists.getList', 'rtm.tags.getList'].includes(method)) {
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    response = await fetch(API, { method: 'POST', body: new URLSearchParams(values) });
+  }
+  if (!response.ok) throw new Error(method + ': RTM HTTP error ' + response.status);
   const data = (await response.json()).rsp;
   if (!data || data.stat !== 'ok') {
     throw new Error(data?.err?.msg || 'Unexpected RTM response');

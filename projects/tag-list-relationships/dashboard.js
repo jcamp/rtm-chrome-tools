@@ -48,29 +48,61 @@ function countTasks(tasks) {
   return { lists, tags };
 }
 
+// List names remain visible even when the task-count request fails.
 async function refresh() {
   status('Loading lists and tags…');
-  try {
-    const data = await settings();
-    const [lists, tags, tasks] = await Promise.all([
-      getLists(data), getTags(data), getIncompleteTasks(data)
-    ]);
-    const counts = countTasks(tasks);
+  const data = await settings();
+  const results = await Promise.allSettled([getLists(data), getTags(data)]);
 
-    // Sort by the original names before appending counts.
-    const listNames = lists.sort((a, b) => a.name.localeCompare(b.name)).map(list =>
-      list.name + ' (' + (counts.lists.get(String(list.id)) || 0) + ')'
-    );
-    const tagNames = tags.sort((a, b) => a.localeCompare(b)).map(tag =>
-      tag + ' (' + (counts.tags.get(tag.toLocaleLowerCase()) || 0) + ')'
-    );
-    showItems('lists', listNames);
-    showItems('tags', tagNames);
-    el('listCount').textContent = lists.length;
-    el('tagCount').textContent = tags.length;
-    status('Updated. Read-only: no tasks were changed.');
+  const lists = results[0].status === 'fulfilled' ? results[0].value : null;
+  const tags = results[1].status === 'fulfilled' ? results[1].value : null;
+
+  if (lists === null && tags === null) {
+    status('Could not load lists or tags. ' + results[0].reason.message);
+    return;
+  }
+
+  // A failed request must not leave old data on screen.
+  if (lists !== null) {
+    const ordered = lists.sort((a, b) => a.name.localeCompare(b.name));
+    showItems('lists', ordered.map(item => item.name));
+    el('listCount').textContent = ordered.length;
+  } else {
+    showItems('lists', []);
+    el('listCount').textContent = '?';
+  }
+
+  if (tags !== null) {
+    const ordered = tags.sort((a, b) => a.localeCompare(b));
+    showItems('tags', ordered);
+    el('tagCount').textContent = ordered.length;
+  } else {
+    showItems('tags', []);
+    el('tagCount').textContent = '?';
+  }
+
+  status('Loading incomplete task counts…');
+  try {
+    const tasks = await getIncompleteTasks(data);
+    const counts = countTasks(tasks);
+    if (lists !== null) {
+      showItems('lists', lists.map(item =>
+        item.name + ' (' + (counts.lists.get(String(item.id)) || 0) + ')'
+      ));
+    }
+    if (tags !== null) {
+      showItems('tags', tags.map(tag =>
+        tag + ' (' + (counts.tags.get(tag.toLocaleLowerCase()) || 0) + ')'
+      ));
+    }
+    status('Updated. Counts show incomplete tasks. No tasks were changed.');
   } catch (error) {
-    status('Could not load data: ' + error.message);
+    // Unknown counts must never be displayed as zero.
+    const problems = [];
+    if (lists === null) problems.push('lists: ' + results[0].reason.message);
+    if (tags === null) problems.push('tags: ' + results[1].reason.message);
+    problems.push('task counts: ' + error.message);
+    status('Names loaded, but ' + problems.join('; ') + '. Try Refresh again.');
   }
 }
 

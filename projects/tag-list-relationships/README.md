@@ -2,7 +2,7 @@
 
 A read-only Chrome extension for browsing the lists and tags in a Remember The Milk account.
 
-**Version:** 0.1.4. The extension retrieves regular lists and tags alphabetically, with the number of incomplete tasks beside each. Smart Lists are excluded because they are saved searches rather than task storage lists. It does not calculate task counts, merge tags or change tasks.
+**Version:** 0.1.5. The extension retrieves regular lists and tags alphabetically, with the number of incomplete tasks beside each. Smart Lists are excluded because they are saved searches rather than task storage lists. It does not calculate task counts, merge tags or change tasks.
 
 ## Installation
 
@@ -26,7 +26,7 @@ A read-only Chrome extension for browsing the lists and tags in a Remember The M
 
 Counts show **incomplete tasks**, including subtasks. Each task is counted once for its list and once for each tag assigned to it. An untagged task contributes to its list count but not to any tag count. Recurring task instances are counted separately when incomplete.
 
-The extension reads tasks with the RTM `rtm.tasks.getList` API using `status:incomplete`, so counts require one additional API request on each refresh. It does not change any tasks. Completed tasks are not included.
+The extension reads tasks with the RTM `rtm.tasks.getList` API using `status:incomplete`, so counts require one additional API request on each refresh. It does not change any tasks. Completed tasks are not included. If RTM returns HTTP 502 while loading tasks, the extension retries once and then displays list and tag names without invented zero counts. Use **Refresh** to try counts again.
 
 ## Files
 
