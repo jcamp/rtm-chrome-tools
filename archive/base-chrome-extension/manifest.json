@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Basic Chrome Extension",
+  "version": "0.1.0",
+  "description": "A minimal Chrome extension starter.",
+  "action": {
+    "default_title": "Basic Chrome Extension",
+    "default_popup": "popup.html"
+  }
+}
