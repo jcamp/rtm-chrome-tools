@@ -108,6 +108,7 @@ function renderOverview() {
 
   el('listCount').textContent = state.lists.length;
   el('tagCount').textContent = state.tags.length;
+  updateTargets();
 
   const listRows = state.lists.map(list => {
     const count = results.byList.get(String(list.id)) || { incomplete: 0, completed: 0 };
@@ -222,11 +223,61 @@ function renderFindings(results, validIncomplete, validCompleted) {
   if (!found) el('emptyLists').append(node('li', 'None for the selected statuses.'));
 }
 
-function select(key) {
+// Keep the selector and the overview table selections in sync.
+function selectedLabel() {
+  if (!state.selected) return '';
+  if (state.selected.type === 'tag') return 'Tag: ' + state.selected.value;
+  const list = state.lists.find(item => String(item.id) === state.selected.value);
+  return list ? 'List: ' + list.name : '';
+}
+
+function updateTargets() {
+  const options = el('targetOptions');
+  options.replaceChildren();
+  for (const list of state.lists) {
+    const option = document.createElement('option');
+    option.value = 'List: ' + list.name;
+    options.append(option);
+  }
+  for (const tag of state.tags) {
+    const option = document.createElement('option');
+    option.value = 'Tag: ' + tag;
+    options.append(option);
+  }
+  el('target').value = selectedLabel();
+}
+
+// Select an exact list or tag. Bare names are accepted when unambiguous.
+function chooseTarget() {
+  const typed = el('target').value.trim().toLocaleLowerCase();
+  if (!typed) {
+    el('targetMessage').textContent = 'Choose a list or tag from the suggestions.';
+    return;
+  }
+  const choices = [
+    ...state.lists.map(item => ({ label: 'List: ' + item.name, key: 'list:' + item.id, name: item.name })),
+    ...state.tags.map(tag => ({ label: 'Tag: ' + tag, key: 'tag:' + tag, name: tag }))
+  ];
+  const matches = choices.filter(item =>
+    item.label.toLocaleLowerCase() === typed || item.name.toLocaleLowerCase() === typed
+  );
+  if (matches.length === 1) {
+    el('targetMessage').textContent = '';
+    select(matches[0].key, false);
+  } else {
+    el('targetMessage').textContent = matches.length > 1
+      ? 'Both a list and a tag have that name. Choose the prefixed suggestion.'
+      : 'No matching list or tag. Choose a suggestion from the dropdown.';
+  }
+}
+
+function select(key, scroll = true) {
   const index = key.indexOf(':');
   state.selected = { type: key.slice(0, index), value: key.slice(index + 1) };
+  el('target').value = selectedLabel();
+  el('targetMessage').textContent = '';
   renderTasks();
-  el('selection').scrollIntoView({ block: 'nearest' });
+  if (scroll) el('selection').scrollIntoView({ block: 'nearest' });
 }
 
 // RTM timestamps are UTC. Show the calendar date in the user's UK timezone.
@@ -274,18 +325,7 @@ function sortTasks(tasks) {
 
 function updateSortHeaders() {
   const titles = { name: 'Task', completed: 'Status', tags: 'Tags', due: 'Due' };
-  for (const button of document.querySelectorAll('button[data-overview-sort]')) {
-  button.addEventListener('click', () => {
-    const type = button.dataset.overviewSort;
-    const field = button.dataset.field;
-    const current = state.overviewSort[type];
-    current.descending = current.field === field ? !current.descending : false;
-    current.field = field;
-    renderOverview();
-  });
-}
-
-for (const button of document.querySelectorAll('#taskTable button[data-sort]')) {
+  for (const button of document.querySelectorAll('#taskTable button[data-sort]')) {
     const active = button.dataset.sort === state.sort.field;
     button.closest('th').setAttribute('aria-sort', active ?
       (state.sort.descending ? 'descending' : 'ascending') : 'none');
@@ -428,6 +468,17 @@ async function refresh() {
   }
 }
 
+for (const button of document.querySelectorAll('button[data-overview-sort]')) {
+  button.addEventListener('click', () => {
+    const type = button.dataset.overviewSort;
+    const field = button.dataset.field;
+    const current = state.overviewSort[type];
+    current.descending = current.field === field ? !current.descending : false;
+    current.field = field;
+    renderOverview();
+  });
+}
+
 for (const button of document.querySelectorAll('#taskTable button[data-sort]')) {
   button.addEventListener('click', () => {
     const field = button.dataset.sort;
@@ -436,6 +487,14 @@ for (const button of document.querySelectorAll('#taskTable button[data-sort]')) 
     renderTasks();
   });
 }
+
+el('target').addEventListener('change', chooseTarget);
+el('target').addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    chooseTarget();
+  }
+});
 
 el('search').addEventListener('input', renderTasks);
 el('showCompleted').addEventListener('change', refresh);
@@ -493,6 +552,8 @@ el('disconnect').addEventListener('click', async () => {
   state.tasks = [];
   state.failures = [];
   state.selected = null;
+  el('target').value = '';
+  el('targetMessage').textContent = '';
   renderOverview();
   showConnection({});
   status('Disconnected. Saved credentials cleared.');
