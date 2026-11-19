@@ -57,15 +57,15 @@ async function refresh() {
     ]);
     const counts = countTasks(tasks);
 
-    const listNames = lists.map(list =>
+    // Sort by the original names before appending counts.
+    const listNames = lists.sort((a, b) => a.name.localeCompare(b.name)).map(list =>
       list.name + ' (' + (counts.lists.get(String(list.id)) || 0) + ')'
     );
-    const tagNames = tags.map(tag =>
+    const tagNames = tags.sort((a, b) => a.localeCompare(b)).map(tag =>
       tag + ' (' + (counts.tags.get(tag.toLocaleLowerCase()) || 0) + ')'
     );
-    // Sort by names, not their displayed counts.
-    showItems('lists', listNames.sort((a, b) => a.localeCompare(b)));
-    showItems('tags', tagNames.sort((a, b) => a.localeCompare(b)));
+    showItems('lists', listNames);
+    showItems('tags', tagNames);
     el('listCount').textContent = lists.length;
     el('tagCount').textContent = tags.length;
     status('Updated. Read-only: no tasks were changed.');
