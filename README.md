@@ -1,59 +1,28 @@
 # RTM Chrome Tools
 
-A lightweight Google Chrome extension for utilities that work with [Remember The Milk](https://www.rememberthemilk.com/).
+A collection of small Google Chrome extensions for [Remember The Milk](https://www.rememberthemilk.com/).
 
-**Version:** 0.1.0
+Each extension lives in its own folder and can be installed independently. The repository also includes a generic Chrome extension starter.
 
-This is an initial extension skeleton. It provides a popup with a test button, but does not yet connect to Remember The Milk or access or modify tasks.
+## Extensions
 
-## Installation
-
-1. Select **Code → Download ZIP** on GitHub and extract the files.
-2. Open `chrome://extensions` in Google Chrome.
-3. Enable **Developer mode**.
-4. Select **Load unpacked**.
-5. Select the extracted folder containing `manifest.json` (not its parent folder).
-6. Optionally pin the extension using Chrome's Extensions menu.
-
-The extension is installed locally and does not require publication in the Chrome Web Store.
-
-## Usage
-
-Click the extension icon, then select **Test extension**.
-
-The message `Extension is working.` confirms that the popup and JavaScript are running.
-
-No Remember The Milk account or API credentials are required for this version.
-
-## Files
-
-| File | Purpose |
+| Extension | Description |
 | --- | --- |
-| `manifest.json` | Chrome extension configuration. |
-| `popup.html` | Popup layout and basic styling. |
-| `popup.js` | Test button behaviour. |
-| `README.md` | Project documentation. |
-| `AGENTS.md` | Contributor and development guidance. |
-| `LICENSE` | MIT licence. |
+| [RTM Chrome Tools starter](projects/rtm-chrome-tools/) | Initial working test popup. Does not connect to RTM or change tasks. |
 
-The extension uses plain HTML and JavaScript with no build process or third-party dependencies.
+## Reusable skeleton
 
-## Updating
+[Basic Chrome Extension](archive/base-chrome-extension/) is a generic starter for other projects, including projects unrelated to RTM.
 
-For an extension installed using **Load unpacked**:
+## Installing an extension
 
-1. Download or pull the updated project files into the same folder.
-2. Visit `chrome://extensions`.
-3. Select **Reload** for RTM Chrome Tools.
+1. Download or clone the repository.
+2. Open `chrome://extensions` in Google Chrome and enable **Developer mode**.
+3. Select **Load unpacked**.
+4. Select the folder of the extension you want to install, containing its own `manifest.json` (for the RTM starter: `projects/rtm-chrome-tools`).
 
-Changes made on GitHub are not automatically installed in Chrome.
-
-## Troubleshooting
-
-If the popup does not work, open it, right-click and select **Inspect**, then check the **Console** for errors.
+See each extension's own README for its usage and documentation.
 
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
-
-This project uses the Remember The Milk API but is not endorsed or certified by Remember The Milk.
