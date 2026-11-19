@@ -103,6 +103,7 @@ el('disconnect').addEventListener('click', async () => {
   status('Disconnected. Saved credentials cleared.');
 });
 
+// Keep both panels hidden until Chrome has returned the saved connection.
 const initial = await settings();
 showConnection(initial);
 if (initial.token) {

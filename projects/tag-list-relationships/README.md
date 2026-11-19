@@ -2,7 +2,7 @@
 
 A read-only Chrome extension for browsing the lists and tags in a Remember The Milk account.
 
-**Version:** 0.1.1. The extension currently retrieves list names and tag names. It does not calculate task counts, merge tags or change tasks.
+**Version:** 0.1.2. The extension currently retrieves list names and tag names. It does not calculate task counts, merge tags or change tasks.
 
 ## Installation
 
@@ -42,6 +42,8 @@ The API key, shared secret and token are stored in `chrome.storage.local` so the
 An unfinished authorisation is stored temporarily in Chrome session storage so you can close and reopen the dashboard. Once authorisation succeeds, the credentials are stored locally. If Chrome ends the session before you finish, begin authorisation again.
 
 The current list/tag view has no task counts and does not inspect tasks or completed-task history. This first version needs a live test with an RTM account.
+
+The dashboard checks for an existing connection before showing the sign-in form, avoiding a brief sign-in screen on repeat visits.
 
 ## Troubleshooting
 
