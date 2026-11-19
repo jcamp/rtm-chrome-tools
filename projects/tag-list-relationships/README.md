@@ -2,7 +2,7 @@
 
 A read-only Chrome extension for browsing the lists and tags in a Remember The Milk account.
 
-**Version:** 0.1.5. The extension retrieves regular lists and tags alphabetically, with the number of incomplete tasks beside each. Smart Lists are excluded because they are saved searches rather than task storage lists. It does not calculate task counts, merge tags or change tasks.
+**Version:** 0.1.6. The extension retrieves regular lists and tags alphabetically, with the number of incomplete tasks beside each. Smart Lists are excluded because they are saved searches rather than task storage lists. It does not merge tags or change tasks.
 
 ## Installation
 
@@ -26,7 +26,11 @@ A read-only Chrome extension for browsing the lists and tags in a Remember The M
 
 Counts show **incomplete tasks**, including subtasks. Each task is counted once for its list and once for each tag assigned to it. An untagged task contributes to its list count but not to any tag count. Recurring task instances are counted separately when incomplete.
 
-The extension reads tasks with the RTM `rtm.tasks.getList` API using `status:incomplete`, so counts require one additional API request on each refresh. It does not change any tasks. Completed tasks are not included. If RTM returns HTTP 502 while loading tasks, the extension retries once and then displays list and tag names without invented zero counts. Use **Refresh** to try counts again.
+The extension requests tasks **one regular list at a time**, using `rtm.tasks.getList` with that list's `list_id` and `status:incomplete`. It waits for each response before requesting the next list. This avoids downloading the entire account's tasks in one large request. RTM documents the `list_id` argument for this method.
+
+List counts appear progressively as each request completes. If a list fails, it is labelled **unavailable** rather than showing an incorrect zero. Since failed lists could contain any tag, tag totals are labelled **incomplete** until every list succeeds. The full failure details appear in the status message. Use **Refresh** to retry.
+
+A transient HTTP 502 error is retried once for read-only calls. Completed tasks are not counted. Task and subtask count accuracy still needs verification with a live RTM account.
 
 ## Files
 

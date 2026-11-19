@@ -44,10 +44,13 @@ export async function getLists(credentials) {
   return toArray(result.lists?.list).filter(list => list.deleted !== '1' && list.smart !== '1');
 }
 
-// Retrieve incomplete tasks in one request for list and tag counts.
-// A recurring task series can contain multiple task instances.
-export async function getIncompleteTasks(credentials) {
-  const result = await call('rtm.tasks.getList', { filter: 'status:incomplete' }, credentials);
+// Retrieve incomplete tasks from one regular list only.
+// Calling separately per list avoids requesting the entire account at once.
+export async function getIncompleteTasks(credentials, listId) {
+  const result = await call('rtm.tasks.getList', {
+    list_id: String(listId),
+    filter: 'status:incomplete'
+  }, credentials);
   const tasks = [];
   const seen = new Set();
 
@@ -60,9 +63,8 @@ export async function getIncompleteTasks(credentials) {
       for (const task of toArray(series.task)) {
         if (task.completed || task.deleted) continue;
 
-        // Avoid counting a task twice if an API response repeats it.
-        const id = task.id || series.id;
-        const key = String(list.id) + ':' + String(series.id) + ':' + String(id);
+        // Do not double-count an instance returned more than once.
+        const key = String(list.id) + ':' + String(series.id) + ':' + String(task.id || series.id);
         if (seen.has(key)) continue;
         seen.add(key);
         tasks.push({ listId: String(list.id), tags });
