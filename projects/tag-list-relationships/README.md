@@ -1,66 +1,58 @@
 # Tag & List Relationships
 
-A read-only Chrome extension for browsing the lists and tags in a Remember The Milk account.
+**Version:** 0.2.0, Stage 1 read-only analysis.
 
-**Version:** 0.1.6. The extension retrieves regular lists and tags alphabetically, with the number of incomplete tasks beside each. Smart Lists are excluded because they are saved searches rather than task storage lists. It does not merge tags or change tasks.
+A Chrome extension for inspecting Remember The Milk's regular lists, tags and task relationships. This is an early test build and has not yet been verified against a representative RTM account.
 
-## Installation
+## Install
 
-1. Download or clone this repository.
-2. Open `chrome://extensions` in Chrome.
-3. Enable **Developer mode** and click **Load unpacked**.
-4. Select the `projects/tag-list-relationships` folder containing `manifest.json`.
-5. Pin the extension if you wish.
+1. Download this repository or pull the latest changes.
+2. In Chrome, visit `chrome://extensions` and enable Developer mode.
+3. Choose **Load unpacked** and select the `projects/tag-list-relationships` folder.
+4. After updates, reload the extension from the same page.
 
-## First use
+## Connect
 
-1. Click the extension's icon, then **Open dashboard**.
-2. Obtain an API key and shared secret from [RTM API Keys](https://www.rememberthemilk.com/services/api/keys.rtm) by registering an application. An existing application key that you own can also be reused. Enter both values in the dashboard.
-3. Click **Authorise in RTM** and approve **read-only** access in the RTM browser tab.
-4. Return to the dashboard and click **I've authorised access**.
-5. Your lists and tags should appear. Use **Refresh** to fetch them again.
+Open the extension dashboard. If needed, register an RTM application at [RTM API Keys](https://www.rememberthemilk.com/services/api/keys.rtm). Enter its API key and shared secret, choose **Authorise in RTM**, approve **read-only** access in RTM and then choose **I've authorised access**. Your own existing API key can be reused. Disconnect clears saved credentials.
 
-**Important:** You need an API key and shared secret for an RTM application. Neither is provided in this repository.
+The API key, shared secret and token are stored in Chrome's local extension storage, which is not a credential vault. Pending authorisation is temporarily stored in session storage. Never commit credentials to GitHub.
 
-## Task counts
+## Analysis
 
-Counts show **incomplete tasks**, including subtasks. Each task is counted once for its list and once for each tag assigned to it. An untagged task contributes to its list count but not to any tag count. Recurring task instances are counted separately when incomplete.
+The dashboard displays alphabetical regular lists (not Smart Lists), tags and separate incomplete/completed instance counts. Each list is retrieved sequentially, with a separate request for each status. Completed-task scanning can be switched off, in which case completed counts say *not scanned*. A failed request leaves that count unknown (`?`) rather than claiming zero. Tag counts are unknown if any required list request failed.
 
-The extension requests tasks **one regular list at a time**, using `rtm.tasks.getList` with that list's `list_id` and `status:incomplete`. It waits for each response before requesting the next list. This avoids downloading the entire account's tasks in one large request. RTM documents the `list_id` argument for this method.
+Select a list or tag to inspect matching loaded tasks. The search field filters task names and the inspector displays up to 500 matching instances. It shows completion status, assigned tags, due date and a marker when RTM returns a parent task ID. The API returns task series and task instances separately, so recurring instances can be counted individually. Subtask and completed-history coverage must be verified with real RTM data.
 
-List counts appear progressively as each request completes. If a list fails, it is labelled **unavailable** rather than showing an incorrect zero. Since failed lists could contain any tag, tag totals are labelled **incomplete** until every list succeeds. The full failure details appear in the status message. Use **Refresh** to retry.
+When all incomplete and completed requests have succeeded, the tool identifies unused tags, single-task tags, tags confined to one list, numbered similar tag names, untagged task counts and empty regular lists. **Suggestions are not automatic merge instructions.** If a request fails, findings needing full coverage are withheld.
 
-A transient HTTP 502 error is retried once for read-only calls. Completed tasks are not counted. Task and subtask count accuracy still needs verification with a live RTM account.
+The extension is **read-only**. It does not merge tags, move tasks, alter lists or modify RTM data.
+
+## Reliability
+
+A transient HTTP 502 response is retried once for the API's read methods. Requests run sequentially by list and status, prioritising reliability over speed. Refresh fetches everything again. Partial results remain visible, with the failed list and status displayed.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `manifest.json` | Chrome manifest and minimum permissions. |
-| `popup.html`, `popup.js` | Toolbar popup that opens the dashboard. |
-| `dashboard.html`, `dashboard.js` | Connection screen and list/tag display. |
-| `rtm.js` | Signed, read-only RTM API requests. |
-| `md5.js` | MIT-licensed MD5 dependency from blueimp-md5 v2.19.0, as bundled by [Später](https://github.com/andygrunwald/spaeter). |
-| `AGENTS.md` | Development rules for this project. |
+| `manifest.json` | Chrome permissions and entry point. |
+| `popup.html`, `popup.js` | Toolbar button opening the dashboard. |
+| `dashboard.html`, `dashboard.js` | User interface and sequential scan. |
+| `rtm.js` | RTM authentication and read-only API calls. |
+| `analysis.js` | Task parsing, counting and relationship analysis. |
+| `md5.js` | blueimp-md5 v2.19.0 (MIT), supplied via [Später](https://github.com/andygrunwald/spaeter). |
+| `AGENTS.md` | Development guidance. |
+| [`SPECIFICATION.md`](SPECIFICATION.md) | Agreed long-term behaviour and development stages. |
 
-## Security and limits
+## Current limitations
 
-The extension requests only RTM read permission and exposes no task-changing actions. It communicates directly with `api.rememberthemilk.com`.
-
-The API key, shared secret and token are stored in `chrome.storage.local` so they persist across restarts. This is browser extension storage, **not an encrypted credential vault**. Do not add credentials to GitHub files. **Disconnect** clears the saved credentials.
-
-An unfinished authorisation is stored temporarily in Chrome session storage so you can close and reopen the dashboard. Once authorisation succeeds, the credentials are stored locally. If Chrome ends the session before you finish, begin authorisation again.
-
-The counts do not include completed-task history. The extension still needs testing against an RTM account with nested subtasks and recurring tasks.
-
-The dashboard checks for an existing connection before showing the sign-in form, avoiding a brief sign-in screen on repeat visits.
-
-## Troubleshooting
-
-Right-click inside the dashboard and select **Inspect**, then look at the Console for JavaScript errors. API failures are shown on the page.
-
-After pulling updates from GitHub, reload this extension at `chrome://extensions`. If Chrome is still loading an earlier copy of the extension from a different folder, check its installed path.
+- Read-only Stage 1 test build, not a release-ready consolidation tool.
+- Direct, reliable deep links to individual RTM tasks have not been confirmed, so none are fabricated.
+- Only the first 500 matches are displayed in the inspector.
+- Tag counts cover returned RTM task instances, not necessarily distinct task titles.
+- Deeply nested subtasks, recurring history and completed-task API coverage require real-account validation.
+- No exported reports or remembered suggestion exclusions yet.
 
 ## Licence
 
-MIT. See the repository [LICENSE](../../LICENSE). This project uses the Remember The Milk API but is not endorsed or certified by Remember The Milk.
+MIT, see [LICENSE](../../LICENSE). Uses the Remember The Milk API but is not endorsed or certified by Remember The Milk.

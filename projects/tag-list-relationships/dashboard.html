@@ -2,40 +2,61 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tag & List Relationships</title>
   <style>
-    body{font:15px Arial,sans-serif;max-width:950px;margin:32px auto;padding:0 20px;line-height:1.5}
-    h1{margin-bottom:0}h2{margin-top:30px}
-    .muted{color:#555}input{padding:8px;width:min(100%,420px);box-sizing:border-box}
-    label{display:block;margin:12px 0}button{padding:9px 14px;margin:5px 5px 5px 0;cursor:pointer}
-    #status{padding:10px 0;white-space:pre-wrap}ul{padding-left:22px}
-    .columns{display:grid;grid-template-columns:1fr 1fr;gap:30px}
-    [hidden]{display:none!important}
-    @media(max-width:640px){.columns{grid-template-columns:1fr}}
+    body{font:15px Arial,sans-serif;max-width:1120px;margin:28px auto;padding:0 18px;line-height:1.45}
+    h1{margin:0 0 6px}h2{font-size:19px;margin:24px 0 10px}
+    .muted{color:#555}.small{font-size:13px}.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    button,input{padding:8px;font:inherit}button{cursor:pointer}button:disabled{cursor:wait}
+    label{display:block;margin:12px 0}label input{display:block;max-width:420px;width:100%;box-sizing:border-box}
+    table{width:100%;border-collapse:collapse}th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #ddd}
+    th{background:#eee}tr[data-key]{cursor:pointer}tr[data-key]:hover{background:#f0f5fa}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:24px}#status{white-space:pre-wrap}
+    [hidden]{display:none!important}a{overflow-wrap:anywhere}
+    @media(max-width:760px){.two{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
   <h1>Tag & List Relationships</h1>
-  <p class="muted">Read-only RTM list and tag browser. Counts show incomplete tasks, including subtasks. No tasks are changed.</p>
+  <p class="muted">Read-only analysis of regular RTM lists and tags. Nothing is modified.</p>
   <section id="setup" hidden>
     <h2>Connect to Remember The Milk</h2>
-    <p>Enter your RTM application API key and shared secret. The extension requests read-only access.</p>
-    <p>Need credentials? Visit <a href="https://www.rememberthemilk.com/services/api/keys.rtm" target="_blank" rel="noopener noreferrer">RTM API Keys</a> and register an application to obtain both values. If you already registered your own key for another extension, you can reuse it.</p>
-    <p>After clicking <strong>Authorise in RTM</strong>, approve access on the RTM website. Return here and click <strong>I've authorised access</strong>. Your connection will then be remembered.</p>
+    <p>Obtain your API key and shared secret by registering an application at
+      <a href="https://www.rememberthemilk.com/services/api/keys.rtm" target="_blank" rel="noopener noreferrer">RTM API Keys</a>.
+      You may reuse a key that you registered yourself. Authorise read-only access in RTM, then return here.</p>
     <label>API key <input id="apiKey" autocomplete="off"></label>
     <label>Shared secret <input id="secret" type="password" autocomplete="off"></label>
     <button id="connect">1. Authorise in RTM</button>
     <button id="authorised" hidden>2. I've authorised access</button>
   </section>
   <section id="connected" hidden>
-    <p>Connected as <strong id="username"></strong>.</p>
-    <button id="refresh">Refresh lists and tags</button>
-    <button id="disconnect">Disconnect</button>
-    <div class="columns">
-      <section><h2>Lists (<span id="listCount">0</span>)</h2><ul id="lists"></ul></section>
-      <section><h2>Tags (<span id="tagCount">0</span>)</h2><ul id="tags"></ul></section>
+    <p>Connected as <strong id="username"></strong></p>
+    <div class="controls">
+      <button id="refresh">Refresh analysis</button>
+      <button id="disconnect">Disconnect</button>
+      <label style="margin:0"><input id="showCompleted" type="checkbox" checked style="display:inline;width:auto"> Include completed tasks</label>
     </div>
+    <p class="small muted">A count shown as ? has not been verified. Failed requests do not become zero counts.</p>
+    <div class="two">
+      <section><h2>Regular lists (<span id="listCount">0</span>)</h2>
+        <table><thead><tr><th>List</th><th>Incomplete</th><th>Completed</th></tr></thead><tbody id="lists"></tbody></table>
+      </section>
+      <section><h2>Tags (<span id="tagCount">0</span>)</h2>
+        <table><thead><tr><th>Tag</th><th>Incomplete</th><th>Completed</th></tr></thead><tbody id="tags"></tbody></table>
+      </section>
+    </div>
+    <h2>Findings</h2>
+    <p id="summary" class="small muted">No analysis yet.</p>
+    <div class="two">
+      <section><h3>Possible tag relationships</h3><ul id="suggestions"></ul></section>
+      <section><h3>Lists with no tasks</h3><ul id="emptyLists"></ul></section>
+    </div>
+    <h2>Task inspector</h2>
+    <p class="small muted">Select a list or tag above to view its tasks. Search within the selected results.</p>
+    <input id="search" placeholder="Filter task names" aria-label="Filter tasks">
+    <p id="selection" class="small muted">Nothing selected.</p>
+    <table><thead><tr><th>Task</th><th>List</th><th>Status</th><th>Tags</th><th>Due</th></tr></thead><tbody id="tasks"></tbody></table>
   </section>
   <p id="status" role="status" aria-live="polite">Loading saved connection…</p>
   <script type="module" src="dashboard.js"></script>

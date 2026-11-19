@@ -44,34 +44,14 @@ export async function getLists(credentials) {
   return toArray(result.lists?.list).filter(list => list.deleted !== '1' && list.smart !== '1');
 }
 
-// Retrieve incomplete tasks from one regular list only.
-// Calling separately per list avoids requesting the entire account at once.
-export async function getIncompleteTasks(credentials, listId) {
+// Fetch one status for one list. The response is passed to the pure parser.
+// Never request all account tasks in a single call.
+export async function getTasksForList(credentials, listId, completed) {
   const result = await call('rtm.tasks.getList', {
     list_id: String(listId),
-    filter: 'status:incomplete'
+    filter: completed ? 'status:completed' : 'status:incomplete'
   }, credentials);
-  const tasks = [];
-  const seen = new Set();
-
-  for (const list of toArray(result.tasks?.list)) {
-    for (const series of toArray(list.taskseries)) {
-      const tags = toArray(series.tags?.tag).map(tag =>
-        typeof tag === 'string' ? tag : tag.name
-      ).filter(Boolean);
-
-      for (const task of toArray(series.task)) {
-        if (task.completed || task.deleted) continue;
-
-        // Do not double-count an instance returned more than once.
-        const key = String(list.id) + ':' + String(series.id) + ':' + String(task.id || series.id);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        tasks.push({ listId: String(list.id), tags });
-      }
-    }
-  }
-  return tasks;
+  return result;
 }
 
 export async function getTags(credentials) {
