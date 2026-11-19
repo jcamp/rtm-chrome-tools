@@ -1,6 +1,6 @@
 # Tag & List Relationships
 
-**Version:** 0.2.1, Stage 1 read-only analysis.
+**Version:** 0.2.2, Stage 1 read-only analysis.
 
 A Chrome extension for inspecting Remember The Milk's regular lists, tags and task relationships. This is an early test build and has not yet been verified against a representative RTM account.
 
@@ -23,7 +23,7 @@ The dashboard displays alphabetical regular lists (not Smart Lists), tags and se
 
 Select a list or tag to inspect matching loaded tasks. The search field filters task names and the inspector displays up to 500 matching instances. It shows completion status, assigned tags, due date and a marker when RTM returns a parent task ID. The API returns task series and task instances separately, so recurring instances can be counted individually. Subtask and completed-history coverage must be verified with real RTM data.
 
-When all requested statuses have been retrieved successfully, the tool identifies unused tags, single-task tags, tags confined to one list, numbered similar tag names, untagged task counts and empty regular lists. **Suggestions are not automatic merge instructions.** If a request fails, findings needing full coverage are withheld.
+When all requested statuses have been retrieved successfully, the tool identifies unused tags, single-task tags, tags confined to one list, numbered similar tag names, untagged task counts and empty regular lists. The findings are displayed in separate tables for similar names, single-task tags, tags used within one list and tags without matching tasks. **Suggestions are not automatic merge instructions.** If a request fails, findings needing full coverage are withheld.
 
 The extension is **read-only**. It does not merge tags, move tasks, alter lists or modify RTM data.
 

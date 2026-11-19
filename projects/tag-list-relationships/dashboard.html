@@ -48,10 +48,15 @@
     </div>
     <h2>Findings</h2>
     <p id="summary" class="small muted">No analysis yet.</p>
-    <div class="two">
-      <section><h3>Possible tag relationships</h3><ul id="suggestions"></ul></section>
-      <section><h3>Lists with no tasks</h3><ul id="emptyLists"></ul></section>
-    </div>
+    <section>
+      <h3>Possible tag relationships</h3>
+      <p class="small muted">These are suggestions for review, not automatic changes. Counts cover the selected task statuses.</p>
+      <div id="suggestions"></div>
+    </section>
+    <section>
+      <h3>Lists with no matching tasks</h3>
+      <ul id="emptyLists"></ul>
+    </section>
     <h2>Task inspector</h2>
     <p class="small muted">Click a list or tag name above to view its tasks. Search within the selected results.</p>
     <input id="search" placeholder="Filter task names" aria-label="Filter tasks">

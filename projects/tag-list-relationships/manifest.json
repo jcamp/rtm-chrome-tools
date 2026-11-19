@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tag & List Relationships",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Read-only overview of Remember The Milk lists and tags.",
   "permissions": [
     "storage"

@@ -108,11 +108,60 @@ function renderFindings(results, validIncomplete, validCompleted) {
   el('summary').textContent = state.tasks.length + ' ' + scope + ' task instances checked. ' +
     results.untagged.length + ' untagged. Suggestions are based on ' + scope + ' tasks only.';
 
+  // Separate categories into readable tables instead of one long bullet list.
+  const groups = [
+    { type: 'Similar names', columns: ['Tags to review'], values: item => [item.detail] },
+    { type: 'Single-task tag', columns: ['Tag', 'Incomplete', 'Completed'], values: item => {
+      const count = results.byTag.get(item.tag.toLowerCase());
+      return [item.tag, count?.incomplete || 0, state.completed ? count?.completed || 0 : 'not scanned'];
+    } },
+    { type: 'Single-list tag', columns: ['Tag', 'List', 'Incomplete', 'Completed'], values: item => {
+      const count = results.byTag.get(item.tag.toLowerCase());
+      const listId = count ? [...count.lists][0] : '';
+      const listName = state.lists.find(list => String(list.id) === listId)?.name || '';
+      return [item.tag, listName, count?.incomplete || 0, state.completed ? count?.completed || 0 : 'not scanned'];
+    } },
+    { type: 'No matching tasks', columns: ['Tag'], values: item => [item.tag] }
+  ];
+
+  const headings = {
+    'Similar names': 'Similar tag names',
+    'Single-task tag': 'Tags used by one task',
+    'Single-list tag': 'Tags used in one list',
+    'No matching tasks': 'Tags without matching tasks'
+  };
+
   const output = el('suggestions');
-  for (const item of results.suggestions) {
-    output.append(node('li', item.type + ': ' + item.tag + ' (' + item.detail + ')'));
+  let displayed = 0;
+  for (const group of groups) {
+    let items = results.suggestions.filter(item => item.type === group.type);
+    // Similar names are already presented as a group in the detail field.
+    if (group.type === 'Similar names') {
+      items = items.filter((item, index, array) =>
+        array.findIndex(other => other.detail === item.detail) === index);
+    }
+    if (!items.length) continue;
+
+    const section = document.createElement('section');
+    const heading = node('h4', headings[group.type] + ' (' + items.length + ')');
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const headingRow = document.createElement('tr');
+    for (const column of group.columns) headingRow.append(node('th', column));
+    thead.append(headingRow);
+    table.append(thead);
+    const tbody = document.createElement('tbody');
+    for (const item of items) {
+      const row = document.createElement('tr');
+      for (const value of group.values(item)) row.append(node('td', value));
+      tbody.append(row);
+    }
+    table.append(tbody);
+    section.append(heading, table);
+    output.append(section);
+    displayed += items.length;
   }
-  if (!results.suggestions.length) output.append(node('li', 'No suggestions found.'));
+  if (!displayed) output.append(node('p', 'No relationships suggested.'));
 
   let found = false;
   for (const list of state.lists) {
