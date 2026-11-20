@@ -9,7 +9,7 @@ const FIELDS = [
   ['created','Created date'],['modified','Modified date'],['estimate','Time estimate'],
   ['location','Location ID'],['postponed','Postponed count'],['recurrence','Recurrence'],
   ['notes','Notes'],['noteCount','Note count'],['url','Task URL'],
-  ['taskId','Task ID'],['parentId','Parent task ID'],['level','Hierarchy level']
+  ['taskId','Task ID'],['parentId','Parent task ID'],['level','Hierarchy level (0 = root)']
 ];
 const DEFAULT_FIELDS = ['hierarchy','list','due','priority','status','tags'];
 const state = { lists: [], tags: [], fields: FIELDS.map(([id,label]) => ({ id,label,enabled:DEFAULT_FIELDS.includes(id) })),
