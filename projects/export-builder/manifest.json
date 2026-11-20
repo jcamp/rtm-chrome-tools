@@ -11,7 +11,8 @@
     "scripting"
   ],
   "host_permissions": [
-    "https://api.rememberthemilk.com/*"
+    "https://api.rememberthemilk.com/*",
+    "https://www.rememberthemilk.com/*"
   ],
   "action": {
     "default_title": "RTM Export Builder",
