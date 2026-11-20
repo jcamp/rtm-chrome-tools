@@ -2,3 +2,5 @@
 
 /* Explicitly honour HTML hidden even on flex-labelled form controls. */
 [hidden]{display:none!important}
+
+.diagnostic{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;border:1px solid #dce1e7;background:#f7f9fc;padding:12px;border-radius:6px;font-size:.8rem}
