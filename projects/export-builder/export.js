@@ -157,6 +157,55 @@ async function refreshTabs() {
   else $('rtmTab').value = '';
   if (!candidates.length) message('No open RTM app tab found. Open RTM and refresh tabs.');
 }
+// Inspect selected checkbox structure without returning task names or other private content.
+// Only tag names, class names and attribute *names* are returned.
+async function inspectSelection() {
+  const tabId = Number($('rtmTab').value);
+  if (!Number.isSafeInteger(tabId) || tabId <= 0) throw new Error('Choose an RTM tab first.');
+  const tabs = await chrome.tabs.query({url:'https://www.rememberthemilk.com/*'});
+  if (!tabs.some(tab => tab.id === tabId && tab.url?.includes('/app/'))) {
+    throw new Error('RTM tab not found. Refresh the tab list.');
+  }
+  const result=await chrome.scripting.executeScript({target:{tabId},func:() => {
+    const selectors = [
+      'input[type="checkbox"]',
+      'input[type="checkbox"]:checked',
+      '[role="checkbox"]',
+      '[role="checkbox"][aria-checked="true"]',
+      '[aria-selected="true"]',
+      '[data-task-id]',
+      '[data-task-id].selected',
+      '[class*="selected"]',
+      '[class*="checked"]'
+    ];
+    const counts=Object.fromEntries(selectors.map(selector=>[selector,document.querySelectorAll(selector).length]));
+    const nodes=[...document.querySelectorAll('input[type="checkbox"]:checked, [role="checkbox"][aria-checked="true"], [aria-selected="true"]')].slice(0,3);
+    // If RTM uses custom checks, capture representative checkbox-like structure.
+    if(!nodes.length) nodes.push(...[...document.querySelectorAll('input[type="checkbox"], [role="checkbox"], [class*="checkbox"], [class*="checkBox"]')].slice(0,3));
+    const structure=nodes.map(node=>{
+      const chain=[];let current=node;
+      for(let depth=0;depth<5&&current;depth++,current=current.parentElement){
+        chain.push({tag:current.tagName.toLowerCase(),
+          classes:[...current.classList].slice(0,8),
+          attributeNames:[...current.attributes].map(attr=>attr.name).filter(name=>!name.startsWith('on')).slice(0,14)});
+      }
+      return chain;
+    });
+    return {documentTitle:'RTM tab (title omitted)',counts,structure};
+  }});
+  return JSON.stringify(result[0]?.result||{},null,2);
+}
+async function runSelectionInspection() {
+  try {
+    const report=await inspectSelection();
+    $('selectionDiagnostic').textContent=report;
+    $('selectionDiagnostic').hidden=false;
+    $('copyInspection').hidden=false;
+    message('Checkbox structure captured. No task titles or task contents are included.');
+  } catch(error) {
+    message('Selection inspection failed: '+error.message);
+  }
+}
 async function selectedTaskIds() {
   const tabId = Number($('rtmTab').value);
   if (!Number.isSafeInteger(tabId) || tabId <= 0) {
@@ -420,6 +469,11 @@ async function init(){
   $('scope').addEventListener('change',()=>{updateTargets();markStale();});
   $('refreshTabs').addEventListener('click',()=>refreshTabs().catch(error=>message(error.message)));
   $('rtmTab').addEventListener('change',markStale);
+  $('inspectSelection').addEventListener('click',runSelectionInspection);
+  $('copyInspection').addEventListener('click',async()=>{
+    try{await navigator.clipboard.writeText($('selectionDiagnostic').textContent);message('Structural diagnostic copied.');}
+    catch(error){message('Could not copy diagnostic: '+error.message);}
+  });
   for(const id of ['target','subtasks','completed','format'])$(id).addEventListener('change',markStale);
   $('allFields').addEventListener('click',()=>{state.fields.forEach(field=>field.enabled=true);renderFields();markStale();});
   $('defaults').addEventListener('click',()=>{state.fields=FIELDS.map(([id,label])=>({id,label,enabled:DEFAULT_FIELDS.includes(id)}));renderFields();markStale();});
