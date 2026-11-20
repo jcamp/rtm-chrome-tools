@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RTM Export Builder</title><link rel="stylesheet" href="export.css"></head>
+<body><main><header><h1>RTM Export Builder</h1><p>Choose tasks, arrange fields, preview and export. Your RTM data is never changed.</p></header>
+<section id="setup"><h2>Connect to RTM</h2><p>Use your RTM API key and shared secret. Authorisation requests read-only access.</p>
+<div class="formrow"><label>API key <input id="apiKey" autocomplete="off"></label><label>Shared secret <input id="secret" type="password" autocomplete="off"></label></div>
+<div class="actions"><button id="authorise">Authorise in RTM</button><button id="finish">I've authorised access</button></div></section>
+<section id="connected" hidden><div class="between"><p>Connected as <strong id="username"></strong></p><button id="disconnect" class="quiet">Disconnect</button></div></section>
+<section><h2>1. Select tasks</h2><div class="formrow"><label>Source <select id="scope"><option value="list">List</option><option value="tag">Tag</option><option value="all">All tasks</option><option value="selected">Selected RTM tasks</option></select></label>
+<label id="targetWrap">List or tag <select id="target"></select></label></div>
+<p id="selectionHelp" class="hint" hidden>Selected tasks require an open RTM tab. This feature depends on RTM's interface and must be verified on live selections.</p>
+<div class="options"><label><input type="checkbox" id="subtasks" checked> Include nested subtasks</label><label><input type="checkbox" id="completed"> Include completed tasks</label></div></section>
+<section><div class="between"><h2>2. Fields and order</h2><div class="actions"><button id="allFields" class="quiet">Select all</button><button id="defaults" class="quiet">Defaults</button></div></div><p class="hint">Drag the handle to change the column order. Task hierarchy automatically expands into as many columns as needed.</p><div id="fields" class="fields"></div></section>
+<section><h2>3. Format</h2><label>Download format <select id="format"><option value="tsv">Tab-delimited (TSV)</option><option value="csv">Comma-delimited (CSV)</option></select></label></section>
+<section><div class="between"><h2>4. Preview</h2><div class="actions"><button id="preview" class="primary">Preview</button><button id="copy" disabled>Copy TSV</button><button id="download" disabled>Download</button></div></div>
+<p id="status" role="status">Connect to RTM to begin.</p><div id="summary" class="hint"></div><div id="previewWrap" class="preview"><table><thead id="head"></thead><tbody id="rows"></tbody></table></div></section>
+<footer>RTM Export Builder is not affiliated with Remember The Milk. This tool is read-only.</footer></main><script type="module" src="export.js"></script></body></html>
