@@ -9,7 +9,7 @@
 <label id="targetWrap">List or tag <select id="target"></select></label></div>
 <div id="selectionPanel" hidden>
 <div class="formrow"><label>RTM browser tab <select id="rtmTab"></select></label><div class="tab-refresh"><button id="refreshTabs" type="button">Refresh tabs</button></div></div>
-<p id="selectionHelp" class="hint">Choose the exact RTM tab containing your selected tasks. The exporter never guesses which open session you mean. Selected-task detection still requires validation against the live RTM interface.</p></div>
+<p id="selectionHelp" class="hint">Choose the RTM tab containing your selected tasks. If Preview cannot identify the checked rows, use Inspect selection to generate a private-data-free structural report.</p><div class="actions"><button id="inspectSelection" type="button">Inspect selection</button><button id="copyInspection" type="button" hidden>Copy diagnostic</button></div><pre id="selectionDiagnostic" class="diagnostic" hidden></pre></div>
 <div class="options"><label><input type="checkbox" id="subtasks" checked> Include nested subtasks</label><label><input type="checkbox" id="completed"> Include completed tasks</label></div></section>
 <section><div class="between"><h2>2. Fields and order</h2><div class="actions"><button id="allFields" class="quiet">Select all</button><button id="defaults" class="quiet">Defaults</button></div></div><p class="hint">Drag the handle to change the column order. Task hierarchy automatically expands into as many columns as needed.</p><div id="fields" class="fields"></div></section>
 <section><h2>3. Format</h2><label>Download format <select id="format"><option value="tsv">Tab-delimited (TSV)</option><option value="csv">Comma-delimited (CSV)</option></select></label></section>
