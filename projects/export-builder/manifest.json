@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "RTM Export Builder",
+  "version": "0.1.0",
+  "description": "Read-only configurable CSV and TSV export for Remember The Milk.",
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "downloads",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://api.rememberthemilk.com/*"
+  ],
+  "action": {
+    "default_title": "RTM Export Builder",
+    "default_popup": "popup.html"
+  }
+}
