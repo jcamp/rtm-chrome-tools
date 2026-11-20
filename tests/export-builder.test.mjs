@@ -61,3 +61,26 @@ test('spreadsheet formulas are text-protected', () => {
   assert.match(csv, /'\+CMD/);
   assert.match(csv, /Normal/);
 });
+
+test('UK dates use local calendar day and omit time', () => {
+  const data = {tasks:{list:{id:'1',taskseries:[
+    {id:'summer',name:'Summer due',task:{id:'201',due:'2026-08-24T23:00:00Z',priority:'N'}},
+    {id:'winter',name:'Winter due',task:{id:'202',due:'2026-11-25T00:00:00Z',priority:'1'}}
+  ]}}};
+  const rows = exporter.selectRows(exporter.normaliseResponse(data,new Map()));
+  const out = exporter.headersAndValues(rows);
+  const due = out.headings.indexOf('Due date');
+  const priority = out.headings.indexOf('Priority');
+  assert.deepEqual(out.values.map(row=>row[due]),['25/08/2026','25/11/2026']);
+  assert.deepEqual(out.values.map(row=>row[priority]),['None','1']);
+});
+
+test('RTM JSON content note is included without inventing empty notes', () => {
+  const source={tasks:{list:{id:'1',taskseries:[
+    {id:'with',name:'With notes',notes:{note:[{title:'Memo',content:'First line\\nSecond line'}]},task:{id:'301'}},
+    {id:'without',name:'Without notes',notes:{},task:{id:'302'}}
+  ]}}};
+  const rows=exporter.normaliseResponse(source,new Map());
+  assert.deepEqual(rows[0].notes,[{title:'Memo',body:'First line\\nSecond line'}]);
+  assert.deepEqual(rows[1].notes,[]);
+});
