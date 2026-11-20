@@ -1,5 +1,5 @@
 // RTM Export Builder. Read-only API and local spreadsheet generation.
-import { startAuthorisation, finishAuthorisation, getLists, getTags, getTasksForList } from './rtm.js';
+import { startAuthorisation, finishAuthorisation, getLists, getTags, getTasksForList, call } from './rtm.js';
 
 const $ = id => document.getElementById(id);
 const asArray = value => value == null ? [] : Array.isArray(value) ? value : [value];
@@ -93,8 +93,20 @@ function normaliseTags(value) {
   return asArray(value).map(tag=>typeof tag==='string'?tag:tag?.name||tag?._content||'').filter(Boolean);
 }
 function plainNote(note) {
-  const value=note?._content??note?.content??note?.text??'';
-  return String(value);
+  if (typeof note === 'string') return note;
+  // RTM JSON uses content. Retain compatibility with other known serialisations.
+  const value=note?.content??note?._content??note?.text??note?.['$t']??'';
+  return typeof value === 'string' ? value : String(value ?? '');
+}
+function ukDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+}
+function taskPriority(value) {
+  const text=String(value??'').trim();
+  return text === 'N' || text === '0' ? 'None' : text;
 }
 function normaliseResponse(response, names) {
   const rows=[];const seen=new Set();
@@ -106,7 +118,7 @@ function normaliseResponse(response, names) {
         const id=String(task.id||''); if(!id)continue;
         const key=listId+':'+String(series.id||'')+':'+id;
         if(seen.has(key))continue;seen.add(key);
-        const notes=asArray(series.notes?.note).map(note=>({
+        const notes=asArray(series.notes?.note??series.notes).filter(note=>note && typeof note==='object' || typeof note==='string').map(note=>({
           title:String(note.title||''), body:plainNote(note)
         }));
         rows.push({key,id,listId,seriesId:String(series.id||''),
@@ -117,7 +129,7 @@ function normaliseResponse(response, names) {
           modified:String(series.modified||''),estimate:String(task.estimate||''),
           location:String(series.location_id||''),postponed:String(task.postponed??''),
           recurrence:typeof series.rrule==='string'?series.rrule:String(series.rrule?._content||series.rrule?.rule||''),
-          priority:String(task.priority||''),notes,url:String(series.url||'')});
+          priority:taskPriority(task.priority),notes,url:String(series.url||'')});
       }
     }
   }
@@ -146,10 +158,30 @@ async function retrieve(auth) {
   if(!lists.length)throw new Error('No lists available for this selection.');
   if(scope==='selected')state.selectedIds=await selectedTaskIds();
   const records=[];
-  // Fetch each list sequentially to preserve list grouping and fail safely.
+  const statuses=completed?[false,true]:[false];
+
+  // One filtered call is enough for all lists or tags. RTM documents this behaviour.
+  // Keep the existing per-list call for list scope, with a safe fallback if a
+  // global query fails. Never silently return a partial account export.
+  if(scope!=='list'){
+    let globalSucceeded=true;
+    for(const status of statuses){
+      message('Retrieving '+(status?'completed':'incomplete')+' tasks across all lists…');
+      try {
+        const response=await call('rtm.tasks.getList',
+          {filter:status?'status:completed':'status:incomplete'},auth);
+        records.push(...normaliseResponse(response,names).filter(row=>row.completed===status));
+      }catch(error){
+        globalSucceeded=false;
+        message('Account-wide request failed. Retrying individual lists…');
+        break;
+      }
+    }
+    if(globalSucceeded)return records;
+    records.length=0;
+  }
   for(let index=0;index<lists.length;index++){
     const list=lists[index];
-    const statuses=completed?[false,true]:[false];
     for(const status of statuses){
       message('Retrieving '+(index+1)+' of '+lists.length+': '+list.name+(status?' (completed)':'')+'…');
       const response=await getTasksForList(auth,list.id,status);
@@ -215,7 +247,8 @@ function headersAndValues(rows) {
           case 'taskId':return row.id;
           case 'parentId':return row.parentId;
           case 'level':return String(row.level);
-          case 'completed':return row.completedAt;
+          case 'completed':return ukDate(row.completedAt);
+          case 'due':case 'start':case 'created':case 'modified':return ukDate(row[field.id]);
           default:return row[field.id]??'';
         }
       });
@@ -262,6 +295,11 @@ async function preview() {
     const rows=selectRows(records);
     const result=headersAndValues(rows);
     state.output=result;renderPreview(result);
+    if(state.fields.some(field=>field.id==='notes'&&field.enabled)) {
+      const noteCount=rows.reduce((n,row)=>n+row.notes.length,0);
+      $('summary').textContent += ' Notes returned by RTM: '+noteCount+'.';
+      if(noteCount===0)message('No note data was returned for the selected tasks. Check a task known to have notes.');
+    }
     $('copy').disabled=false;$('download').disabled=false;
     message('Ready. No RTM tasks have been changed.');
   }catch(error){message('Export could not be prepared: '+error.message);}
