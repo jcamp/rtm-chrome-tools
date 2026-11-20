@@ -2,7 +2,7 @@
 
 Standalone read-only Chrome extension for configurable Remember The Milk CSV and TSV exports.
 
-**Version 0.1.0: initial test build, not yet verified against a live RTM account.**
+**Version 0.1.0: initial test build, with fixes following first live user feedback.**
 
 ## Install
 
@@ -59,3 +59,13 @@ Core UI, RTM API access, recursive column builder, preview, CSV/TSV export and c
 This extension performs **no RTM write API operations**.
 
 Not endorsed or certified by Remember The Milk.
+
+## Feedback fixes (20 November 2026)
+
+- Exported due, start, created, modified and completed dates are formatted as UK day/month/year dates using the Europe/London timezone. Time portions are intentionally omitted.
+- Tag, all-task and selected-task previews attempt a single account-wide filtered request per status. If this fails, the extension falls back to sequential list retrieval. A single-list export uses only that list.
+- The optional **Hierarchy level (0 = root)** field contains a number, not another visible indentation. Task, Subtask 1 and Subtask 2 columns remain the primary hierarchy display.
+- RTM notes are read from each task series' notes array, including the documented JSON `content` field. When Notes is selected, the preview summary shows how many notes RTM returned, helping diagnose unexpectedly empty exports. This needs checking against a live task known to have notes.
+- Priority `N` is presented as `None`.
+
+These changes have synthetic regression coverage but have not yet been confirmed in Excel, Google Sheets or the user's RTM account.
