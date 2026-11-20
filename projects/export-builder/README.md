@@ -77,3 +77,9 @@ The source dropdown now hides the List/Tag selector when **Selected RTM tasks** 
 For **Selected RTM tasks**, explicitly choose the open RTM browser tab from the new dropdown, then select **Preview**. **Refresh tabs** updates the list if RTM was opened afterwards. No tab is chosen automatically, even if only one is open. The selection is read from the chosen tab at preview time.
 
 Selection detection is still experimental: the extension needs RTM to expose its selected task IDs in recognisable DOM attributes. If that cannot be established, the exporter fails visibly rather than choosing arbitrary tasks.
+
+## Version 0.1.3: diagnose selected tasks
+
+RTM's visible checked rows do not expose the `data-task-id` values assumed by the initial experimental selection detector. When selected-task Preview fails, choose the relevant RTM tab and click **Inspect selection**, then **Copy diagnostic**. The report lists checkbox/selection element counts, tag names, CSS class names and attribute names for a small number of representative elements and ancestors. It excludes task names and attribute values. Share the diagnostic with the developer so the detection can be corrected from actual RTM markup instead of guessed selectors.
+
+This update diagnoses the issue but does not yet claim that selected-task export works. List, tag and all-task export functionality is unchanged.
