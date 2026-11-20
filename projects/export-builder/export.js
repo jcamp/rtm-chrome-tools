@@ -164,7 +164,15 @@ async function retrieve(auth) {
   async function fetchStatus(parameters, completed) {
     const filter = completed ? 'status:completed' : 'status:incomplete';
     const opts = { ...parameters, filter: parameters.filter ? parameters.filter + ' AND ' + filter : filter };
-    const response = await call('rtm.tasks.getList', opts, auth);
+    let response;
+    try {
+      response = await call('rtm.tasks.getList', opts, auth);
+    } catch (error) {
+      if (error instanceof TypeError && /fetch/i.test(error.message)) {
+        throw new Error('Could not reach the RTM API for this request. Check your connection and retry. No other lists were scanned.');
+      }
+      throw new Error('RTM rejected the requested task data: ' + error.message);
+    }
     return normaliseResponse(response, names).filter(row => row.completed === completed);
   }
 
