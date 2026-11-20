@@ -70,7 +70,8 @@ function renderFields() {
 function updateTargets() {
   const scope=$('scope').value;
   $('targetWrap').hidden = scope==='all'||scope==='selected';
-  $('selectionHelp').hidden = scope!=='selected';
+  $('selectionPanel').hidden = scope!=='selected';
+  if (scope==='selected') refreshTabs().catch(error => message('Cannot list RTM tabs: '+error.message));
   const choices=scope==='tag' ? state.tags.map(tag=>({id:tag,name:tag})) : state.lists;
   const old=$('target').value;
   $('target').replaceChildren();
@@ -135,20 +136,45 @@ function normaliseResponse(response, names) {
   }
   return rows;
 }
-// Detect explicit selections in a live RTM tab. Never guess from focused text or sidebar links.
+// A user must explicitly identify the RTM tab whose selection should be exported.
+async function refreshTabs() {
+  const old = $('rtmTab').value;
+  const tabs = await chrome.tabs.query({url:'https://www.rememberthemilk.com/*'});
+  const candidates = tabs.filter(tab => tab.url?.includes('/app/'));
+  $('rtmTab').replaceChildren();
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Choose an open RTM tab';
+  $('rtmTab').append(placeholder);
+  for (const tab of candidates) {
+    const option = document.createElement('option');
+    option.value = String(tab.id);
+    // The title distinguishes multiple RTM tabs showing different lists.
+    option.textContent = (tab.title || 'Remember The Milk') + ' (tab ' + tab.id + ')';
+    $('rtmTab').append(option);
+  }
+  if (candidates.some(tab => String(tab.id) === old)) $('rtmTab').value = old;
+  else $('rtmTab').value = '';
+  if (!candidates.length) message('No open RTM app tab found. Open RTM and refresh tabs.');
+}
 async function selectedTaskIds() {
-  const tabs=await chrome.tabs.query({url:'https://www.rememberthemilk.com/*'});
-  const candidates=tabs.filter(tab=>tab.url?.includes('/app/')).sort((a,b)=>(b.lastAccessed||0)-(a.lastAccessed||0));
-  if(!candidates.length)throw new Error('Open the RTM web app and select tasks first.');
-  const result=await chrome.scripting.executeScript({target:{tabId:candidates[0].id},func:() => {
-    const ids=new Set();
-    for(const node of document.querySelectorAll('[aria-selected="true"][data-task-id], input[type="checkbox"]:checked[data-task-id], [data-task-id].selected')){
-      const id=node.getAttribute('data-task-id');if(id&&/^\d+$/.test(id))ids.add(id);
+  const tabId = Number($('rtmTab').value);
+  if (!Number.isSafeInteger(tabId) || tabId <= 0) {
+    throw new Error('Choose the RTM browser tab containing your selected tasks.');
+  }
+  const tabs = await chrome.tabs.query({url:'https://www.rememberthemilk.com/*'});
+  const selected = tabs.find(tab => tab.id === tabId && tab.url?.includes('/app/'));
+  if (!selected) throw new Error('The chosen RTM tab has closed or navigated away. Refresh tabs and choose again.');
+  const result = await chrome.scripting.executeScript({target:{tabId},func:() => {
+    const ids = new Set();
+    for (const node of document.querySelectorAll('[aria-selected="true"][data-task-id], input[type="checkbox"]:checked[data-task-id], [data-task-id].selected')) {
+      const id = node.getAttribute('data-task-id');
+      if (id && /^\\d+$/.test(id)) ids.add(id);
     }
     return [...ids];
   }});
   const ids=result[0]?.result||[];
-  if(!ids.length)throw new Error('Could not read the selected tasks. RTM selection detection needs live interface verification. Choose a list or tag for now.');
+  if(!ids.length) throw new Error('No selected task IDs could be read from the chosen RTM tab. Selection detection requires live RTM interface verification.');
   return ids;
 }
 async function retrieve(auth) {
@@ -392,6 +418,8 @@ async function init(){
   $('completed').checked=Boolean(pref.completed);$('format').value=pref.format||'tsv';
   renderFields();
   $('scope').addEventListener('change',()=>{updateTargets();markStale();});
+  $('refreshTabs').addEventListener('click',()=>refreshTabs().catch(error=>message(error.message)));
+  $('rtmTab').addEventListener('change',markStale);
   for(const id of ['target','subtasks','completed','format'])$(id).addEventListener('change',markStale);
   $('allFields').addEventListener('click',()=>{state.fields.forEach(field=>field.enabled=true);renderFields();markStale();});
   $('defaults').addEventListener('click',()=>{state.fields=FIELDS.map(([id,label])=>({id,label,enabled:DEFAULT_FIELDS.includes(id)}));renderFields();markStale();});
