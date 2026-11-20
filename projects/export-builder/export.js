@@ -152,43 +152,77 @@ async function selectedTaskIds() {
   return ids;
 }
 async function retrieve(auth) {
-  const scope=$('scope').value, completed=$('completed').checked;
-  const names=new Map(state.lists.map(list=>[String(list.id),list.name]));
-  const lists=scope==='list' ? state.lists.filter(item=>String(item.id)===$('target').value) : state.lists;
-  if(!lists.length)throw new Error('No lists available for this selection.');
-  if(scope==='selected')state.selectedIds=await selectedTaskIds();
-  const records=[];
-  const statuses=completed?[false,true]:[false];
+  const scope = $('scope').value;
+  const includeCompleted = $('completed').checked;
+  const includeChildren = $('subtasks').checked;
+  const names = new Map(state.lists.map(list => [String(list.id), list.name]));
+  const statuses = includeCompleted ? [false, true] : [false];
+  const results = [];
 
-  // One filtered call is enough for all lists or tags. RTM documents this behaviour.
-  // Keep the existing per-list call for list scope, with a safe fallback if a
-  // global query fails. Never silently return a partial account export.
-  if(scope!=='list'){
-    let globalSucceeded=true;
-    for(const status of statuses){
-      message('Retrieving '+(status?'completed':'incomplete')+' tasks across all lists…');
-      try {
-        const response=await call('rtm.tasks.getList',
-          {filter:status?'status:completed':'status:incomplete'},auth);
-        records.push(...normaliseResponse(response,names).filter(row=>row.completed===status));
-      }catch(error){
-        globalSucceeded=false;
-        message('Account-wide request failed. Retrying individual lists…');
-        break;
+  // Each request is deliberately scoped. A failed request must be reported
+  // rather than silently scanning every list in the account.
+  async function fetchStatus(parameters, completed) {
+    const filter = completed ? 'status:completed' : 'status:incomplete';
+    const opts = { ...parameters, filter: parameters.filter ? parameters.filter + ' AND ' + filter : filter };
+    const response = await call('rtm.tasks.getList', opts, auth);
+    return normaliseResponse(response, names).filter(row => row.completed === completed);
+  }
+
+  if (scope === 'list') {
+    const listId = $('target').value;
+    if (!state.lists.some(list => String(list.id) === listId)) throw new Error('Select a list first.');
+    for (const completed of statuses) {
+      message('Retrieving ' + (completed ? 'completed' : 'incomplete') + ' tasks from the selected list…');
+      results.push(...await fetchStatus({list_id:listId}, completed));
+    }
+    return results;
+  }
+
+  if (scope === 'selected') {
+    state.selectedIds = await selectedTaskIds();
+    // The API does not offer a direct bulk lookup by arbitrary task IDs.
+    // Search globally rather than making one call for each list.
+    for (const completed of statuses) {
+      message('Locating selected tasks (' + (completed ? 'completed' : 'incomplete') + ')…');
+      results.push(...await fetchStatus({}, completed));
+    }
+    return results;
+  }
+
+  if (scope === 'tag') {
+    const tag = $('target').value;
+    if (!tag) throw new Error('Select a tag first.');
+    // Double quotes are escaped for RTM's advanced-search syntax.
+    const tagFilter = 'tag:"' + tag.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+    for (const completed of statuses) {
+      message('Retrieving tasks tagged ' + tag + ' (' + (completed ? 'completed' : 'incomplete') + ')…');
+      results.push(...await fetchStatus({filter:tagFilter}, completed));
+    }
+    if (!includeChildren || !results.length) return results;
+
+    // Tagged roots may have untagged descendants. Retrieve only the lists
+    // containing matched tasks. Never scan unrelated lists.
+    const matchingListIds = [...new Set(results.map(row => row.listId))];
+    const listResults = [];
+    for (let index = 0; index < matchingListIds.length; index++) {
+      const listId = matchingListIds[index];
+      message('Retrieving subtask context from list ' + (index + 1) + ' of ' + matchingListIds.length + '…');
+      for (const completed of statuses) {
+        listResults.push(...await fetchStatus({list_id:listId}, completed));
       }
     }
-    if(globalSucceeded)return records;
-    records.length=0;
+    return listResults;
   }
-  for(let index=0;index<lists.length;index++){
-    const list=lists[index];
-    for(const status of statuses){
-      message('Retrieving '+(index+1)+' of '+lists.length+': '+list.name+(status?' (completed)':'')+'…');
-      const response=await getTasksForList(auth,list.id,status);
-      records.push(...normaliseResponse(response,names).filter(row=>row.completed===status));
+
+  if (scope === 'all') {
+    for (const completed of statuses) {
+      message('Retrieving all ' + (completed ? 'completed' : 'incomplete') + ' tasks…');
+      results.push(...await fetchStatus({}, completed));
     }
+    return results;
   }
-  return records;
+
+  throw new Error('Unknown export source.');
 }
 function selectRows(records) {
   const scope=$('scope').value, includeChildren=$('subtasks').checked;
