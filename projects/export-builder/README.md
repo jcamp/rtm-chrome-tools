@@ -69,3 +69,11 @@ Not endorsed or certified by Remember The Milk.
 - Priority `N` is presented as `None`.
 
 These changes have synthetic regression coverage but have not yet been confirmed in Excel, Google Sheets or the user's RTM account.
+
+## Version 0.1.2: selected RTM tab
+
+The source dropdown now hides the List/Tag selector when **Selected RTM tasks** or **All tasks** is chosen. The CSS now respects HTML's hidden attribute on flex labels.
+
+For **Selected RTM tasks**, explicitly choose the open RTM browser tab from the new dropdown, then select **Preview**. **Refresh tabs** updates the list if RTM was opened afterwards. No tab is chosen automatically, even if only one is open. The selection is read from the chosen tab at preview time.
+
+Selection detection is still experimental: the extension needs RTM to expose its selected task IDs in recognisable DOM attributes. If that cannot be established, the exporter fails visibly rather than choosing arbitrary tasks.
