@@ -118,7 +118,7 @@ function normaliseResponse(response, names) {
         const id=String(task.id||''); if(!id)continue;
         const key=listId+':'+String(series.id||'')+':'+id;
         if(seen.has(key))continue;seen.add(key);
-        const notes=asArray(series.notes?.note??series.notes).filter(note=>note && typeof note==='object' || typeof note==='string').map(note=>({
+        const notes=asArray(series.notes?.note).filter(note=>note != null).map(note=>({
           title:String(note.title||''), body:plainNote(note)
         }));
         rows.push({key,id,listId,seriesId:String(series.id||''),
@@ -301,7 +301,7 @@ async function preview() {
       if(noteCount===0)message('No note data was returned for the selected tasks. Check a task known to have notes.');
     }
     $('copy').disabled=false;$('download').disabled=false;
-    message('Ready. No RTM tasks have been changed.');
+    if (!($('summary').textContent.includes('Notes returned by RTM: 0.'))) message('Ready. No RTM tasks have been changed.');
   }catch(error){message('Export could not be prepared: '+error.message);}
   finally{state.running=false;$('preview').disabled=false;}
 }
