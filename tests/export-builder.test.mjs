@@ -199,7 +199,7 @@ test('selected tasks use name-scoped requests, not whole-account scans', async (
   };
   exporter.state.lists=[{id:'1',name:'Inbox'}];
   const rows=await exporter.retrieve({apiKey:'test',secret:'test',token:'test'});
-  assert.deepEqual(exporter.state.selectedKeys,['1:100:100','1:101:101'].map((value,index)=>index===0?'1:Get ink:100':'1:Pay rent:101'));
+  assert.deepEqual(exporter.state.selectedKeys,['1:100:100','1:101:101']);
   assert.equal(apiCalls.length,2);
   assert.equal(apiCalls.every(entry=>entry.params.filter.includes('name:')),true);
   assert.equal(rows.length,2);
