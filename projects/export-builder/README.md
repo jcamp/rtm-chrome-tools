@@ -83,3 +83,9 @@ Selection detection is still experimental: the extension needs RTM to expose its
 RTM's visible checked rows do not expose the `data-task-id` values assumed by the initial experimental selection detector. When selected-task Preview fails, choose the relevant RTM tab and click **Inspect selection**, then **Copy diagnostic**. The report lists checkbox/selection element counts, tag names, CSS class names and attribute names for a small number of representative elements and ancestors. It excludes task names and attribute values. Share the diagnostic with the developer so the detection can be corrected from actual RTM markup instead of guessed selectors.
 
 This update diagnoses the issue but does not yet claim that selected-task export works. List, tag and all-task export functionality is unchanged.
+
+## Version 0.1.5: selected-task matching
+
+The 0.1.4 diagnostic confirmed that RTM's selected tasks have a checked custom checkbox inside a `role="option"` row, but no API task ID appears in that DOM structure. This release reads those rows from the explicitly chosen RTM tab and matches their task titles to the authenticated RTM API response. An export is refused if any row has no unique match, including duplicate titles or ambiguous names. Task content is processed locally, and no task data is sent to external services besides the existing authorised RTM API requests.
+
+**Known limitation:** Exact selected-task matching has synthetic tests but is not yet live-verified. It requires the checked row's text to contain a distinct API task title. If RTM structures a title differently or multiple API tasks share the name, the extension reports a matching error rather than exporting an arbitrary task. It still fetches the relevant account task data to resolve selected rows, which may be slower than a list export.
