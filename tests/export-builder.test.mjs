@@ -104,3 +104,21 @@ test('selected task matching rejects genuinely duplicated titles and missing tit
   assert.throws(()=>exporter.matchSelectedTasks(
     [{text:'Missing task Today',exactTexts:['Missing task']}],records),/uniquely match/);
 });
+
+test('selected recurring task prefers its unique incomplete instance', () => {
+  const records=[
+    {id:'11',name:'National Trust Payment',completed:true},
+    {id:'12',name:'National Trust Payment',completed:false}
+  ];
+  const chosen=[{text:'National Trust Payment yearly',exactTexts:['National Trust Payment']}];
+  assert.deepEqual(exporter.matchSelectedTasks(chosen,records),['12']);
+});
+
+test('selected task refuses multiple incomplete records with same name', () => {
+  const records=[
+    {id:'11',name:'National Trust Payment',completed:false},
+    {id:'12',name:'National Trust Payment',completed:false}
+  ];
+  assert.throws(()=>exporter.matchSelectedTasks(
+    [{text:'National Trust Payment',exactTexts:['National Trust Payment']}],records),/uniquely identify/);
+});
