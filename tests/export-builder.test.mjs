@@ -21,8 +21,13 @@ const inputs = {
 const create = new Function('document', 'chrome', 'startAuthorisation', 'finishAuthorisation',
   'getLists', 'getTags', 'getTasksForList', 'call',
   body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state, matchSelectedTasks, retrieve };');
-const exporter = create({ getElementById: id => inputs[id] || {} }, {},
-  () => {}, () => {}, () => {}, () => {}, () => {});
+const exporter = create({getElementById:id=>inputs[id]||{}}, {
+  tabs:{query:async()=>[{id:9,url:'https://www.rememberthemilk.com/app/'}]},
+  scripting:{executeScript:async()=>[{result:{checked:2,rows:[
+    {text:'Get ink',exactTexts:['Get ink']},
+    {text:'Pay rent',exactTexts:['Pay rent']}
+  ]}}]}
+},()=>{},()=>{},()=>{},()=>{},()=>{},call);
 
 const response = { tasks: { list: { id: '1', taskseries: [
   { id: 'a', name: 'Parent', task: { id: '100', completed: '' } },
