@@ -239,10 +239,10 @@ async function selectedTaskRows() {
       if(!row) continue;
       // Text content stays in extension memory and is never sent anywhere
       // other than the local matching routine.
-      const text=row.textContent.replace(/\\s+/g,' ').trim();
+      const text=row.textContent.replace(/\s+/g,' ').trim();
       const exactTexts=[];
       for(const node of row.querySelectorAll('*')){
-        const value=(node.textContent||'').replace(/\\s+/g,' ').trim();
+        const value=(node.textContent||'').replace(/\s+/g,' ').trim();
         if(value && value.length<=500 && !exactTexts.includes(value)) exactTexts.push(value);
       }
       rows.push({text, exactTexts});
@@ -258,22 +258,32 @@ async function selectedTaskRows() {
 }
 function matchSelectedTasks(selection,records) {
   const ids=[];
-  const normalise=value=>String(value||'').replace(/\\s+/g,' ').trim();
+  const normalise=value=>String(value||'').replace(/\s+/g,' ').trim();
   for(const chosen of selection){
-    const matches=records.filter(record=>{
-      const title=normalise(record.name);
-      if(!title)return false;
-      // Prefer a complete task title in a descendant element. If RTM has
-      // split a title over multiple spans, accept the exact row prefix only.
-      return chosen.exactTexts.includes(title) || chosen.text===title ||
-        chosen.text.startsWith(title+' ');
-    });
-    // Duplicated names, recurring instances and matching prefixes must not
-    // produce guessed IDs. Only one possible API task is acceptable.
+    const fragments=new Set(chosen.exactTexts.map(normalise).filter(Boolean));
+    const rowText=normalise(chosen.text);
+    // Look for full, exact task titles first. A title appearing as part of
+    // a longer title must not create a second candidate.
+    let matches=records.filter(record=>fragments.has(normalise(record.name)));
+    if(matches.length){
+      const maxLength=Math.max(...matches.map(row=>normalise(row.name).length));
+      matches=matches.filter(row=>normalise(row.name).length===maxLength);
+    } else {
+      // RTM sometimes splits the task title across spans. Only use a row
+      // prefix if no exact fragment matched, and prefer the longest title.
+      matches=records.filter(record=>{
+        const title=normalise(record.name);
+        return title && (rowText===title || rowText.startsWith(title+' '));
+      });
+      if(matches.length){
+        const maxLength=Math.max(...matches.map(row=>normalise(row.name).length));
+        matches=matches.filter(row=>normalise(row.name).length===maxLength);
+      }
+    }
     if(matches.length!==1) {
       throw new Error('Could not uniquely match '+selection.length+
         ' selected RTM rows to API tasks ('+matches.length+
-        ' matches for one row). Use a list/tag export for ambiguous task titles.');
+        ' matches for one row). Identical task titles or recurring instances may need task IDs.');
     }
     if(ids.includes(matches[0].id))throw new Error('Multiple selected rows matched the same task. Export stopped.');
     ids.push(matches[0].id);
