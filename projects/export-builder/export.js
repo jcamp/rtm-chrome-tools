@@ -204,7 +204,24 @@ async function inspectSelection() {
     return {checkedCheckboxes:checked.length,uncheckedCheckboxes:unchecked.length,
       note:'No task titles, ID values or note text are included.',counts,structure};
   }});
-  return JSON.stringify(result[0]?.result||{},null,2);
+  const report=result[0]?.result||{};
+  // Explicit diagnostic only. The report includes selected row text, which
+  // can contain private task titles. Never send or copy it automatically.
+  const rows=await selectedTaskRows();
+  report.selectionCandidates=rows.map((row,index)=>{
+    const fragments=row.exactTexts
+      .map(value=>String(value).replace(/\\s+/g,' ').trim())
+      .filter(value=>value.length>=4&&value.length<=250)
+      .sort((a,b)=>b.length-a.length);
+    return {
+      row:index+1,
+      fragments:row.exactTexts.slice(0,20),
+      lookupHint:fragments[0]||null,
+      hintMatchesOneFragment:fragments.includes(fragments[0])
+    };
+  });
+  report.privacy='Selected task titles and row text may be included. Review before sharing.';
+  return JSON.stringify(report,null,2);
 }
 async function runSelectionInspection() {
   try {
@@ -212,7 +229,7 @@ async function runSelectionInspection() {
     $('selectionDiagnostic').textContent=report;
     $('selectionDiagnostic').hidden=false;
     $('copyInspection').hidden=false;
-    message('Checkbox structure captured. No task titles or task contents are included.');
+    message('Diagnostic captured. Review selected task titles before copying or sharing.');
   } catch(error) {
     message('Selection inspection failed: '+error.message);
   }
