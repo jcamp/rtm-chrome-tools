@@ -10,13 +10,17 @@ const original = await readFile(file, 'utf8');
 const body = original
   .replace(/^import .*?;$/gm, '')
   .replace(/init\(\)\.catch\(.*?\);\s*$/s, '');
+const apiCalls = [];
+let apiHandler = () => ({rsp:{stat:'ok'}});
+const call = async (method,params) => { apiCalls.push({method,params}); return apiHandler(method,params); };
 const inputs = {
   scope: { value: 'all' }, target: { value: '' },
-  subtasks: { checked: true }, completed: { checked: false }
+  subtasks: { checked: true }, completed: { checked: false },
+  rtmTab: {value:'9'}
 };
 const create = new Function('document', 'chrome', 'startAuthorisation', 'finishAuthorisation',
-  'getLists', 'getTags', 'getTasksForList',
-  body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state, matchSelectedTasks };');
+  'getLists', 'getTags', 'getTasksForList', 'call',
+  body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state, matchSelectedTasks, retrieve };');
 const exporter = create({ getElementById: id => inputs[id] || {} }, {},
   () => {}, () => {}, () => {}, () => {}, () => {});
 
@@ -180,5 +184,42 @@ test('task hierarchy does not attach a child from another list', () => {
     {key:'2:b:2',listId:'2',seriesId:'b',id:'2',parentId:'1',name:'Unrelated'}
   ];
   assert.deepEqual(exporter.selectRows(rows).map(row=>row.name),['Parent']);
+  inputs.scope.value='all';
+});
+
+test('selected tasks use name-scoped requests, not whole-account scans', async () => {
+  inputs.scope.value='selected';
+  inputs.subtasks.checked=false;
+  inputs.completed.checked=false;
+  apiCalls.length=0;
+  apiHandler=(method,params)=>{
+    const title=params.filter.includes('Get ink')?'Get ink':'Pay rent';
+    const id=title==='Get ink'?'100':'101';
+    return {tasks:{list:{id:'1',taskseries:{id,title,name:title,task:{id}}}}};
+  };
+  exporter.state.lists=[{id:'1',name:'Inbox'}];
+  const rows=await exporter.retrieve({apiKey:'test',secret:'test',token:'test'});
+  assert.deepEqual(exporter.state.selectedKeys,['1:100:100','1:101:101'].map((value,index)=>index===0?'1:Get ink:100':'1:Pay rent:101'));
+  assert.equal(apiCalls.length,2);
+  assert.equal(apiCalls.every(entry=>entry.params.filter.includes('name:')),true);
+  assert.equal(rows.length,2);
+  inputs.scope.value='all';
+  inputs.subtasks.checked=true;
+});
+
+test('list-only fetch uses list_id and propagates API failures', async () => {
+  inputs.scope.value='list';
+  inputs.target.value='1';
+  inputs.completed.checked=false;
+  exporter.state.lists=[{id:'1',name:'Inbox'}];
+  apiCalls.length=0;
+  apiHandler=()=>{throw new Error('RTM HTTP error 502');};
+  let failed=false;
+  try{await exporter.retrieve({apiKey:'test'})}catch(error){
+    failed=error.message.includes('502');
+  }
+  assert.equal(failed,true);
+  assert.equal(apiCalls.length,1);
+  assert.equal(apiCalls[0].params.list_id,'1');
   inputs.scope.value='all';
 });
