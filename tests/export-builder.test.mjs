@@ -10,15 +10,24 @@ const original = await readFile(file, 'utf8');
 const body = original
   .replace(/^import .*?;$/gm, '')
   .replace(/init\(\)\.catch\(.*?\);\s*$/s, '');
+const apiCalls = [];
+let apiHandler = () => ({rsp:{stat:'ok'}});
+const call = async (method,params) => { apiCalls.push({method,params}); return apiHandler(method,params); };
 const inputs = {
   scope: { value: 'all' }, target: { value: '' },
-  subtasks: { checked: true }, completed: { checked: false }
+  subtasks: { checked: true }, completed: { checked: false },
+  rtmTab: {value:'9'}
 };
 const create = new Function('document', 'chrome', 'startAuthorisation', 'finishAuthorisation',
-  'getLists', 'getTags', 'getTasksForList',
-  body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state, matchSelectedTasks };');
-const exporter = create({ getElementById: id => inputs[id] || {} }, {},
-  () => {}, () => {}, () => {}, () => {}, () => {});
+  'getLists', 'getTags', 'getTasksForList', 'call',
+  body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state, matchSelectedTasks, retrieve };');
+const exporter = create({getElementById:id=>inputs[id]||{}}, {
+  tabs:{query:async()=>[{id:9,url:'https://www.rememberthemilk.com/app/'}]},
+  scripting:{executeScript:async()=>[{result:{checked:2,rows:[
+    {text:'Get ink',exactTexts:['Get ink']},
+    {text:'Pay rent',exactTexts:['Pay rent']}
+  ]}}]}
+},()=>{},()=>{},()=>{},()=>{},()=>{},call);
 
 const response = { tasks: { list: { id: '1', taskseries: [
   { id: 'a', name: 'Parent', task: { id: '100', completed: '' } },
@@ -42,7 +51,7 @@ test('recursive hierarchy creates separate columns', () => {
 test('selected parent and descendant are exported once', () => {
   const data = exporter.normaliseResponse(response, new Map());
   inputs.scope.value = 'selected';
-  exporter.state.selectedIds = ['100','101'];
+  exporter.state.selectedKeys = ['1:a:100','1:b:101'];
   const rows = exporter.selectRows(data);
   assert.deepEqual(rows.map(row => row.id), ['100','101','102']);
   inputs.scope.value = 'all';
@@ -88,13 +97,13 @@ test('RTM JSON content note is included without inventing empty notes', () => {
 test('selected task row matches a unique API task title', () => {
   const records=[{id:'101',name:'Repair camera'}, {id:'102',name:'Post invoice'}];
   const selected=[{text:'Repair camera workshop Today',exactTexts:['Repair camera','workshop']}];
-  assert.deepEqual(exporter.matchSelectedTasks(selected,records),['101']);
+  assert.deepEqual(exporter.matchSelectedTasks(selected,records),['::101']);
 });
 
 test('selected task matching prefers the longest exact title', () => {
   const records=[{id:'1',name:'Pay'}, {id:'2',name:'Pay rent'}];
   const selected=[{text:'Pay rent Today',exactTexts:['Pay rent']}];
-  assert.deepEqual(exporter.matchSelectedTasks(selected,records),['2']);
+  assert.deepEqual(exporter.matchSelectedTasks(selected,records),['::2']);
 });
 
 test('selected task matching rejects genuinely duplicated titles and missing titles', () => {
@@ -111,7 +120,7 @@ test('selected recurring task prefers its unique incomplete instance', () => {
     {id:'12',name:'National Trust Payment',completed:false}
   ];
   const chosen=[{text:'National Trust Payment yearly',exactTexts:['National Trust Payment']}];
-  assert.deepEqual(exporter.matchSelectedTasks(chosen,records),['12']);
+  assert.deepEqual(exporter.matchSelectedTasks(chosen,records),['::12']);
 });
 
 test('selected task refuses multiple incomplete records with same name', () => {
@@ -136,11 +145,86 @@ test('four selected rows map independently and in screen order', () => {
     {text:'Call solicitor Friday',exactTexts:['Call solicitor','Friday']},
     {text:'National Trust Payment annually',exactTexts:['National Trust Payment','annually']}
   ];
-  assert.deepEqual(exporter.matchSelectedTasks(selection,records),['20','40','30','10']);
+  assert.deepEqual(exporter.matchSelectedTasks(selection,records),['::20','::40','::30','::10']);
 });
 
 test('unrelated row text must not match shorter API task title', () => {
   const records=[{id:'1',name:'Pay rent',completed:false}];
   assert.throws(()=>exporter.matchSelectedTasks(
     [{text:'Pay rent every month',exactTexts:['Pay rent every month']}],records),/Selected row/);
+});
+
+test('selected task identity never matches another list with the same task ID', () => {
+  inputs.scope.value='selected';
+  inputs.subtasks.checked=false;
+  exporter.state.selectedKeys=['1:a:10'];
+  const rows=[
+    {key:'1:a:10',listId:'1',seriesId:'a',id:'10',parentId:'',name:'A'},
+    {key:'2:b:10',listId:'2',seriesId:'b',id:'10',parentId:'',name:'B'}
+  ];
+  assert.deepEqual(exporter.selectRows(rows).map(row=>row.name),['A']);
+  inputs.scope.value='all';
+  inputs.subtasks.checked=true;
+});
+
+test('selected rows preserve checkbox order even when API order differs', () => {
+  inputs.scope.value='selected';
+  inputs.subtasks.checked=false;
+  exporter.state.selectedKeys=['1:b:2','1:a:1'];
+  const rows=[
+    {key:'1:a:1',listId:'1',seriesId:'a',id:'1',parentId:'',name:'First'},
+    {key:'1:b:2',listId:'1',seriesId:'b',id:'2',parentId:'',name:'Second'}
+  ];
+  assert.deepEqual(exporter.selectRows(rows).map(row=>row.name),['Second','First']);
+  inputs.scope.value='all';
+  inputs.subtasks.checked=true;
+});
+
+test('task hierarchy does not attach a child from another list', () => {
+  inputs.scope.value='selected';
+  inputs.subtasks.checked=true;
+  exporter.state.selectedKeys=['1:a:1'];
+  const rows=[
+    {key:'1:a:1',listId:'1',seriesId:'a',id:'1',parentId:'',name:'Parent'},
+    {key:'2:b:2',listId:'2',seriesId:'b',id:'2',parentId:'1',name:'Unrelated'}
+  ];
+  assert.deepEqual(exporter.selectRows(rows).map(row=>row.name),['Parent']);
+  inputs.scope.value='all';
+});
+
+test('selected tasks use name-scoped requests, not whole-account scans', async () => {
+  inputs.scope.value='selected';
+  inputs.subtasks.checked=false;
+  inputs.completed.checked=false;
+  apiCalls.length=0;
+  apiHandler=(method,params)=>{
+    const title=params.filter.includes('Get ink')?'Get ink':'Pay rent';
+    const id=title==='Get ink'?'100':'101';
+    return {tasks:{list:{id:'1',taskseries:{id,title,name:title,task:{id}}}}};
+  };
+  exporter.state.lists=[{id:'1',name:'Inbox'}];
+  const rows=await exporter.retrieve({apiKey:'test',secret:'test',token:'test'});
+  assert.deepEqual(exporter.state.selectedKeys,['1:100:100','1:101:101']);
+  assert.equal(apiCalls.length,2);
+  assert.equal(apiCalls.every(entry=>entry.params.filter.includes('name:')),true);
+  assert.equal(rows.length,2);
+  inputs.scope.value='all';
+  inputs.subtasks.checked=true;
+});
+
+test('list-only fetch uses list_id and propagates API failures', async () => {
+  inputs.scope.value='list';
+  inputs.target.value='1';
+  inputs.completed.checked=false;
+  exporter.state.lists=[{id:'1',name:'Inbox'}];
+  apiCalls.length=0;
+  apiHandler=()=>{throw new Error('RTM HTTP error 502');};
+  let failed=false;
+  try{await exporter.retrieve({apiKey:'test'})}catch(error){
+    failed=error.message.includes('502');
+  }
+  assert.equal(failed,true);
+  assert.equal(apiCalls.length,1);
+  assert.equal(apiCalls[0].params.list_id,'1');
+  inputs.scope.value='all';
 });

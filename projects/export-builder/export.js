@@ -13,7 +13,7 @@ const FIELDS = [
 ];
 const DEFAULT_FIELDS = ['hierarchy','list','due','priority','status','tags'];
 const state = { lists: [], tags: [], fields: FIELDS.map(([id,label]) => ({ id,label,enabled:DEFAULT_FIELDS.includes(id) })),
-  records: null, output: null, dragging: null, selectedIds: [], selectedRows: [] };
+  records: null, output: null, dragging: null, selectedKeys: [], selectedRows: [] };
 
 function message(text) { $('status').textContent = text; }
 async function credentials() { return chrome.storage.local.get(['apiKey','secret','token','username']); }
@@ -204,7 +204,24 @@ async function inspectSelection() {
     return {checkedCheckboxes:checked.length,uncheckedCheckboxes:unchecked.length,
       note:'No task titles, ID values or note text are included.',counts,structure};
   }});
-  return JSON.stringify(result[0]?.result||{},null,2);
+  const report=result[0]?.result||{};
+  // Explicit diagnostic only. The report includes selected row text, which
+  // can contain private task titles. Never send or copy it automatically.
+  const rows=await selectedTaskRows();
+  report.selectionCandidates=rows.map((row,index)=>{
+    const fragments=row.exactTexts
+      .map(value=>String(value).replace(/\\s+/g,' ').trim())
+      .filter(value=>value.length>=4&&value.length<=250)
+      .sort((a,b)=>b.length-a.length);
+    return {
+      row:index+1,
+      fragments:row.exactTexts.slice(0,20),
+      lookupHint:fragments[0]||null,
+      hintMatchesOneFragment:fragments.includes(fragments[0])
+    };
+  });
+  report.privacy='Selected task titles and row text may be included. Review before sharing.';
+  return JSON.stringify(report,null,2);
 }
 async function runSelectionInspection() {
   try {
@@ -212,7 +229,7 @@ async function runSelectionInspection() {
     $('selectionDiagnostic').textContent=report;
     $('selectionDiagnostic').hidden=false;
     $('copyInspection').hidden=false;
-    message('Checkbox structure captured. No task titles or task contents are included.');
+    message('Diagnostic captured. Review selected task titles before copying or sharing.');
   } catch(error) {
     message('Selection inspection failed: '+error.message);
   }
@@ -288,10 +305,11 @@ function matchSelectedTasks(selection,records) {
       throw new Error('Selected row '+(index+1)+' of '+selection.length+
         ': '+detail+'. Export stopped to avoid an incorrect match.');
     }
-    if(ids.includes(matches[0].id)){
+    const selectedKey=matches[0].key || [matches[0].listId||'',matches[0].seriesId||'',matches[0].id].join(':');
+    if(ids.includes(selectedKey)){
       throw new Error('Selected rows resolved to the same task ID. Export stopped.');
     }
-    ids.push(matches[0].id);
+    ids.push(selectedKey);
   }
   return ids;
 }
@@ -352,11 +370,11 @@ async function retrieve(auth) {
     }
     const unique=new Map(results.map(row=>[row.key,row]));
     const records=[...unique.values()];
-    state.selectedIds=matchSelectedTasks(state.selectedRows,records);
+    state.selectedKeys=matchSelectedTasks(state.selectedRows,records);
     if(!includeChildren)return records;
 
     // Fetch full hierarchy only from lists containing matched tasks.
-    const relevant=new Set(records.filter(row=>state.selectedIds.includes(row.id)).map(row=>row.listId));
+    const relevant=new Set(records.filter(row=>state.selectedKeys.includes(row.key)).map(row=>row.listId));
     for(const listId of relevant){
       message('Loading nested subtasks from selected task list…');
       for(const completed of statuses){
@@ -402,37 +420,54 @@ async function retrieve(auth) {
   throw new Error('Unknown export source.');
 }
 function selectRows(records) {
-  const scope=$('scope').value, includeChildren=$('subtasks').checked;
-  const byId=new Map(), children=new Map();
+  const scope=$('scope').value;
+  const includeChildren=$('subtasks').checked;
+  const selectedKeys=new Set(state.selectedKeys);
+  const selectedOrder=new Map(state.selectedKeys.map((key,index)=>[key,index]));
+  const byScopedId=new Map();
+  const children=new Map();
+
+  // RTM task identity includes its list. A parent ID in another list
+  // must never be treated as the parent of this task.
+  const scopedId=row=>row.listId+':'+row.id;
+  const scopedParent=row=>row.listId+':'+row.parentId;
   for(const row of records){
-    if(!byId.has(row.id))byId.set(row.id,row);
-    if(!children.has(row.parentId))children.set(row.parentId,[]);
-    children.get(row.parentId).push(row);
+    if(!byScopedId.has(scopedId(row)))byScopedId.set(scopedId(row),row);
+    if(row.parentId){
+      const parent=scopedParent(row);
+      if(!children.has(parent))children.set(parent,[]);
+      children.get(parent).push(row);
+    }
   }
   const isMatch=row=>scope==='all'||scope==='list'||
     (scope==='tag'&&row.tags.some(t=>t.toLowerCase()===$('target').value.toLowerCase()))||
-    (scope==='selected'&&state.selectedIds.includes(row.id));
+    (scope==='selected'&&selectedKeys.has(row.key));
   const matched=records.filter(isMatch);
+  if(scope==='selected')matched.sort((a,b)=>
+    (selectedOrder.get(a.key)??Infinity)-(selectedOrder.get(b.key)??Infinity));
+
   const output=[],visited=new Set();
   function visit(row,level) {
     if(visited.has(row.key))return;
-    visited.add(row.key);output.push({...row,level});
-    if(includeChildren)for(const child of children.get(row.id)||[])visit(child,level+1);
+    visited.add(row.key);
+    output.push({...row,level});
+    if(includeChildren){
+      for(const child of children.get(scopedId(row))||[])visit(child,level+1);
+    }
   }
-  // A matching descendant of a matching ancestor belongs to that ancestor's subtree.
   const matching=new Set(matched.map(row=>row.key));
   for(const row of matched){
-    let parent=row.parentId,hasSelectedAncestor=false;
+    let parent=scopedParent(row),hasSelectedAncestor=false;
     const guard=new Set();
-    while(parent&&byId.has(parent)&&!guard.has(parent)){
+    while(row.parentId&&byScopedId.has(parent)&&!guard.has(parent)){
       guard.add(parent);
-      const ancestor=byId.get(parent);
+      const ancestor=byScopedId.get(parent);
       if(matching.has(ancestor.key)){hasSelectedAncestor=true;break;}
-      parent=ancestor.parentId;
+      if(!ancestor.parentId)break;
+      parent=scopedParent(ancestor);
     }
     if(!hasSelectedAncestor || !includeChildren)visit(row,0);
   }
-  // Missing filtered ancestors may cause an otherwise matched task to be unvisited.
   for(const row of matched)if(!visited.has(row.key))visit(row,0);
   return output;
 }
