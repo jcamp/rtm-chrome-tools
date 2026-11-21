@@ -100,9 +100,9 @@ test('selected task matching prefers the longest exact title', () => {
 test('selected task matching rejects genuinely duplicated titles and missing titles', () => {
   const records=[{id:'1',name:'Pay rent'}, {id:'2',name:'Pay rent'}];
   const selected=[{text:'Pay rent Today',exactTexts:['Pay rent']}];
-  assert.throws(()=>exporter.matchSelectedTasks(selected,records),/uniquely match/);
+  assert.throws(()=>exporter.matchSelectedTasks(selected,records),/Selected row/);
   assert.throws(()=>exporter.matchSelectedTasks(
-    [{text:'Missing task Today',exactTexts:['Missing task']}],records),/uniquely match/);
+    [{text:'Missing task Today',exactTexts:['Missing task']}],records),/Selected row/);
 });
 
 test('selected recurring task prefers its unique incomplete instance', () => {
@@ -120,5 +120,27 @@ test('selected task refuses multiple incomplete records with same name', () => {
     {id:'12',name:'National Trust Payment',completed:false}
   ];
   assert.throws(()=>exporter.matchSelectedTasks(
-    [{text:'National Trust Payment',exactTexts:['National Trust Payment']}],records),/uniquely identify/);
+    [{text:'National Trust Payment',exactTexts:['National Trust Payment']}],records),/Selected row/);
+});
+
+test('four selected rows map independently and in screen order', () => {
+  const records=[
+    {id:'40',name:'Pay rent',completed:false},
+    {id:'10',name:'National Trust Payment',completed:false},
+    {id:'20',name:'Get ink',completed:false},
+    {id:'30',name:'Call solicitor',completed:false}
+  ];
+  const selection=[
+    {text:'Get ink Today',exactTexts:['Get ink','Today']},
+    {text:'Pay rent Tomorrow',exactTexts:['Pay rent','Tomorrow']},
+    {text:'Call solicitor Friday',exactTexts:['Call solicitor','Friday']},
+    {text:'National Trust Payment annually',exactTexts:['National Trust Payment','annually']}
+  ];
+  assert.deepEqual(exporter.matchSelectedTasks(selection,records),['20','40','30','10']);
+});
+
+test('unrelated row text must not match shorter API task title', () => {
+  const records=[{id:'1',name:'Pay rent',completed:false}];
+  assert.throws(()=>exporter.matchSelectedTasks(
+    [{text:'Pay rent every month',exactTexts:['Pay rent every month']}],records),/Selected row/);
 });
