@@ -259,7 +259,7 @@ async function selectedTaskRows() {
 function matchSelectedTasks(selection,records) {
   const ids=[];
   const normalise=value=>String(value||'').replace(/\s+/g,' ').trim();
-  for(const chosen of selection){
+  for(const [index,chosen] of selection.entries()){
     const fragments=new Set(chosen.exactTexts.map(normalise).filter(Boolean));
     const rowText=normalise(chosen.text);
     // Look for full, exact task titles first. A title appearing as part of
@@ -280,19 +280,28 @@ function matchSelectedTasks(selection,records) {
         matches=matches.filter(row=>normalise(row.name).length===maxLength);
       }
     }
-    // RTM may return completed historical instances of a recurring task,
-    // all sharing one visible title. The screenshot selection is from the
-    // Incomplete view, so prefer the single incomplete instance if it exists.
+    // Multiple API records may represent the same task from different
+    // contexts. Identical task IDs represent one selection, not ambiguity.
+    const byTaskId=new Map();
+    for(const record of matches){
+      if(!byTaskId.has(String(record.id)))byTaskId.set(String(record.id),record);
+    }
+    matches=[...byTaskId.values()];
+    // Prefer a unique incomplete occurrence when earlier completed
+    // instances share the same title. Still reject unresolved ambiguity.
     if(matches.length>1) {
       const incomplete=matches.filter(row=>!row.completed);
       if(incomplete.length===1) matches=incomplete;
     }
     if(matches.length!==1) {
+      const incomplete=matches.filter(row=>!row.completed).length;
+      const lists=new Set(matches.map(row=>String(row.listId))).size;
       const description=matches.length
-        ? matches.length+' API records remain, including '+matches.filter(row=>!row.completed).length+' incomplete.'
-        : 'No API record matched the selected row title.';
-      throw new Error('Could not uniquely identify one of '+selection.length+
-        ' checked tasks. '+description+' Export stopped rather than choosing a task arbitrarily.');
+        ? matches.length+' distinct task IDs, '+incomplete+' incomplete, across '+lists+' list(s).'
+        : 'No API title matched this row.';
+      throw new Error('Selected row '+(index+1)+' of '+selection.length+
+        ' cannot be identified uniquely: '+description+
+        ' No tasks were exported.');
     }
     if(ids.includes(matches[0].id))throw new Error('Multiple selected rows matched the same task. Export stopped.');
     ids.push(matches[0].id);
