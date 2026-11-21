@@ -91,8 +91,14 @@ test('selected task row matches a unique API task title', () => {
   assert.deepEqual(exporter.matchSelectedTasks(selected,records),['101']);
 });
 
-test('selected task matching rejects duplicate titles and prefix collisions', () => {
+test('selected task matching prefers the longest exact title', () => {
   const records=[{id:'1',name:'Pay'}, {id:'2',name:'Pay rent'}];
+  const selected=[{text:'Pay rent Today',exactTexts:['Pay rent']}];
+  assert.deepEqual(exporter.matchSelectedTasks(selected,records),['2']);
+});
+
+test('selected task matching rejects genuinely duplicated titles and missing titles', () => {
+  const records=[{id:'1',name:'Pay rent'}, {id:'2',name:'Pay rent'}];
   const selected=[{text:'Pay rent Today',exactTexts:['Pay rent']}];
   assert.throws(()=>exporter.matchSelectedTasks(selected,records),/uniquely match/);
   assert.throws(()=>exporter.matchSelectedTasks(
