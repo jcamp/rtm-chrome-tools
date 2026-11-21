@@ -179,19 +179,30 @@ async function inspectSelection() {
       '[class*="checked"]'
     ];
     const counts=Object.fromEntries(selectors.map(selector=>[selector,document.querySelectorAll(selector).length]));
-    const nodes=[...document.querySelectorAll('input[type="checkbox"]:checked, [role="checkbox"][aria-checked="true"], [aria-selected="true"]')].slice(0,3);
-    // If RTM uses custom checks, capture representative checkbox-like structure.
-    if(!nodes.length) nodes.push(...[...document.querySelectorAll('input[type="checkbox"], [role="checkbox"], [class*="checkbox"], [class*="checkBox"]')].slice(0,3));
-    const structure=nodes.map(node=>{
+    // Inspect actual checked checkboxes, not unrelated aria-selected controls.
+    const checked=[...document.querySelectorAll('[role="checkbox"][aria-checked="true"]')];
+    const unchecked=[...document.querySelectorAll('[role="checkbox"][aria-checked="false"]')];
+    const examples=[...checked.slice(0,5),...unchecked.slice(0,1)];
+    const structure=examples.map((node,index)=>{
       const chain=[];let current=node;
-      for(let depth=0;depth<5&&current;depth++,current=current.parentElement){
-        chain.push({tag:current.tagName.toLowerCase(),
-          classes:[...current.classList].slice(0,8),
-          attributeNames:[...current.attributes].map(attr=>attr.name).filter(name=>!name.startsWith('on')).slice(0,14)});
+      for(let depth=0;depth<9&&current;depth++,current=current.parentElement){
+        const id=current.getAttribute('id')||'';
+        chain.push({
+          tag:current.tagName.toLowerCase(),
+          classes:[...current.classList].slice(0,9),
+          role:current.getAttribute('role')||'',
+          ariaChecked:current.getAttribute('aria-checked'),
+          ariaSelected:current.getAttribute('aria-selected'),
+          idShape:id ? (id.replace(/[0-9]/g,'#').slice(0,100)) : '',
+          idIsNumeric:/^\\d+$/.test(id),
+          hasDataTaskId:current.hasAttribute('data-task-id'),
+          attributeNames:[...current.attributes].map(attr=>attr.name).filter(name=>!name.startsWith('on')).slice(0,16)
+        });
       }
-      return chain;
+      return {kind:index<checked.slice(0,5).length?'checked':'unchecked',chain};
     });
-    return {documentTitle:'RTM tab (title omitted)',counts,structure};
+    return {checkedCheckboxes:checked.length,uncheckedCheckboxes:unchecked.length,
+      note:'No task titles, ID values or note text are included.',counts,structure};
   }});
   return JSON.stringify(result[0]?.result||{},null,2);
 }
