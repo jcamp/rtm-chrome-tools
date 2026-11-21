@@ -332,14 +332,38 @@ async function retrieve(auth) {
 
   if (scope === 'selected') {
     state.selectedRows = await selectedTaskRows();
-    // The API does not offer a direct bulk lookup by arbitrary task IDs.
-    // Search globally rather than making one call for each list.
-    for (const completed of statuses) {
-      message('Locating selected tasks (' + (completed ? 'completed' : 'incomplete') + ')…');
-      results.push(...await fetchStatus({}, completed));
+    // Search by a title fragment from each selected row. Do not retrieve the
+    // entire RTM account merely because two checkboxes are selected.
+    // The API name: operator searches task titles, then local matching checks
+    // exact titles. An incorrect hint causes a clear error, not a wrong export.
+    for (let index=0; index<state.selectedRows.length; index++){
+      const chosen=state.selectedRows[index];
+      const candidates=chosen.exactTexts
+        .map(value=>String(value).replace(/\s+/g,' ').trim())
+        .filter(value=>value.length>=4 && value.length<=250)
+        .sort((a,b)=>b.length-a.length);
+      const hint=candidates[0];
+      if(!hint)throw new Error('Selected row '+(index+1)+' has no readable task title.');
+      const safeHint=hint.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+      for(const completed of statuses){
+        message('Looking up selected task '+(index+1)+' of '+state.selectedRows.length+'…');
+        results.push(...await fetchStatus({filter:'name:"'+safeHint+'"'},completed));
+      }
     }
-    state.selectedIds = matchSelectedTasks(state.selectedRows, results);
-    return results;
+    const unique=new Map(results.map(row=>[row.key,row]));
+    const records=[...unique.values()];
+    state.selectedIds=matchSelectedTasks(state.selectedRows,records);
+    if(!includeChildren)return records;
+
+    // Fetch full hierarchy only from lists containing matched tasks.
+    const relevant=new Set(records.filter(row=>state.selectedIds.includes(row.id)).map(row=>row.listId));
+    for(const listId of relevant){
+      message('Loading nested subtasks from selected task list…');
+      for(const completed of statuses){
+        for(const row of await fetchStatus({list_id:listId},completed))unique.set(row.key,row);
+      }
+    }
+    return [...unique.values()];
   }
 
   if (scope === 'tag') {
