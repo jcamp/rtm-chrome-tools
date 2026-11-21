@@ -16,7 +16,7 @@ const inputs = {
 };
 const create = new Function('document', 'chrome', 'startAuthorisation', 'finishAuthorisation',
   'getLists', 'getTags', 'getTasksForList',
-  body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state };');
+  body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state, matchSelectedTasks };');
 const exporter = create({ getElementById: id => inputs[id] || {} }, {},
   () => {}, () => {}, () => {}, () => {}, () => {});
 
@@ -83,4 +83,18 @@ test('RTM JSON content note is included without inventing empty notes', () => {
   const rows=exporter.normaliseResponse(source,new Map());
   assert.deepEqual(rows[0].notes,[{title:'Memo',body:'First line\\nSecond line'}]);
   assert.deepEqual(rows[1].notes,[]);
+});
+
+test('selected task row matches a unique API task title', () => {
+  const records=[{id:'101',name:'Repair camera'}, {id:'102',name:'Post invoice'}];
+  const selected=[{text:'Repair camera workshop Today',exactTexts:['Repair camera','workshop']}];
+  assert.deepEqual(exporter.matchSelectedTasks(selected,records),['101']);
+});
+
+test('selected task matching rejects duplicate titles and prefix collisions', () => {
+  const records=[{id:'1',name:'Pay'}, {id:'2',name:'Pay rent'}];
+  const selected=[{text:'Pay rent Today',exactTexts:['Pay rent']}];
+  assert.throws(()=>exporter.matchSelectedTasks(selected,records),/uniquely match/);
+  assert.throws(()=>exporter.matchSelectedTasks(
+    [{text:'Missing task Today',exactTexts:['Missing task']}],records),/uniquely match/);
 });
