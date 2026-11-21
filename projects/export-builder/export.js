@@ -280,10 +280,19 @@ function matchSelectedTasks(selection,records) {
         matches=matches.filter(row=>normalise(row.name).length===maxLength);
       }
     }
+    // RTM may return completed historical instances of a recurring task,
+    // all sharing one visible title. The screenshot selection is from the
+    // Incomplete view, so prefer the single incomplete instance if it exists.
+    if(matches.length>1) {
+      const incomplete=matches.filter(row=>!row.completed);
+      if(incomplete.length===1) matches=incomplete;
+    }
     if(matches.length!==1) {
-      throw new Error('Could not uniquely match '+selection.length+
-        ' selected RTM rows to API tasks ('+matches.length+
-        ' matches for one row). Identical task titles or recurring instances may need task IDs.');
+      const description=matches.length
+        ? matches.length+' API records remain, including '+matches.filter(row=>!row.completed).length+' incomplete.'
+        : 'No API record matched the selected row title.';
+      throw new Error('Could not uniquely identify one of '+selection.length+
+        ' checked tasks. '+description+' Export stopped rather than choosing a task arbitrarily.');
     }
     if(ids.includes(matches[0].id))throw new Error('Multiple selected rows matched the same task. Export stopped.');
     ids.push(matches[0].id);
