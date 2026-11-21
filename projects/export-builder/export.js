@@ -13,7 +13,7 @@ const FIELDS = [
 ];
 const DEFAULT_FIELDS = ['hierarchy','list','due','priority','status','tags'];
 const state = { lists: [], tags: [], fields: FIELDS.map(([id,label]) => ({ id,label,enabled:DEFAULT_FIELDS.includes(id) })),
-  records: null, output: null, dragging: null, selectedIds: [] };
+  records: null, output: null, dragging: null, selectedIds: [], selectedRows: [] };
 
 function message(text) { $('status').textContent = text; }
 async function credentials() { return chrome.storage.local.get(['apiKey','secret','token','username']); }
@@ -217,24 +217,67 @@ async function runSelectionInspection() {
     message('Selection inspection failed: '+error.message);
   }
 }
-async function selectedTaskIds() {
-  const tabId = Number($('rtmTab').value);
+// RTM uses checked custom controls inside selected task rows, not data-task-id.
+// Capture row text locally, then match task names against the RTM API response.
+// Ambiguous or unmatched rows are rejected. Never export a guessed task.
+async function selectedTaskRows() {
+  const tabId=Number($('rtmTab').value);
   if (!Number.isSafeInteger(tabId) || tabId <= 0) {
-    throw new Error('Choose the RTM browser tab containing your selected tasks.');
+    throw new Error('Choose the RTM tab containing your selected tasks.');
   }
-  const tabs = await chrome.tabs.query({url:'https://www.rememberthemilk.com/*'});
-  const selected = tabs.find(tab => tab.id === tabId && tab.url?.includes('/app/'));
-  if (!selected) throw new Error('The chosen RTM tab has closed or navigated away. Refresh tabs and choose again.');
-  const result = await chrome.scripting.executeScript({target:{tabId},func:() => {
-    const ids = new Set();
-    for (const node of document.querySelectorAll('[aria-selected="true"][data-task-id], input[type="checkbox"]:checked[data-task-id], [data-task-id].selected')) {
-      const id = node.getAttribute('data-task-id');
-      if (id && /^\\d+$/.test(id)) ids.add(id);
+  const tabs=await chrome.tabs.query({url:'https://www.rememberthemilk.com/*'});
+  if (!tabs.some(tab=>tab.id===tabId && tab.url?.includes('/app/'))) {
+    throw new Error('The chosen RTM tab has closed. Refresh tabs and select it again.');
+  }
+  const injected=await chrome.scripting.executeScript({target:{tabId},func:()=>{
+    // The checked control and its nearest role=option parent were confirmed
+    // against the supplied RTM selection diagnostics (November 2026).
+    const boxes=[...document.querySelectorAll('[role="checkbox"][aria-checked="true"]')];
+    const rows=[];
+    for(const box of boxes){
+      const row=box.closest('[role="option"][aria-selected="true"]');
+      if(!row) continue;
+      // Text content stays in extension memory and is never sent anywhere
+      // other than the local matching routine.
+      const text=row.textContent.replace(/\\s+/g,' ').trim();
+      const exactTexts=[];
+      for(const node of row.querySelectorAll('*')){
+        const value=(node.textContent||'').replace(/\\s+/g,' ').trim();
+        if(value && value.length<=500 && !exactTexts.includes(value)) exactTexts.push(value);
+      }
+      rows.push({text, exactTexts});
     }
-    return [...ids];
+    return {checked:boxes.length,rows};
   }});
-  const ids=result[0]?.result||[];
-  if(!ids.length) throw new Error('No selected task IDs could be read from the chosen RTM tab. Selection detection requires live RTM interface verification.');
+  const selection=injected[0]?.result;
+  if(!selection?.rows?.length)throw new Error('No selected RTM task rows were found in the chosen tab.');
+  if(selection.rows.length!==selection.checked) {
+    throw new Error('Some checked controls were not recognised as task rows. Selection is ambiguous.');
+  }
+  return selection.rows;
+}
+function matchSelectedTasks(selection,records) {
+  const ids=[];
+  const normalise=value=>String(value||'').replace(/\\s+/g,' ').trim();
+  for(const chosen of selection){
+    const matches=records.filter(record=>{
+      const title=normalise(record.name);
+      if(!title)return false;
+      // Prefer a complete task title in a descendant element. If RTM has
+      // split a title over multiple spans, accept the exact row prefix only.
+      return chosen.exactTexts.includes(title) || chosen.text===title ||
+        chosen.text.startsWith(title+' ');
+    });
+    // Duplicated names, recurring instances and matching prefixes must not
+    // produce guessed IDs. Only one possible API task is acceptable.
+    if(matches.length!==1) {
+      throw new Error('Could not uniquely match '+selection.length+
+        ' selected RTM rows to API tasks ('+matches.length+
+        ' matches for one row). Use a list/tag export for ambiguous task titles.');
+    }
+    if(ids.includes(matches[0].id))throw new Error('Multiple selected rows matched the same task. Export stopped.');
+    ids.push(matches[0].id);
+  }
   return ids;
 }
 async function retrieve(auth) {
@@ -273,13 +316,14 @@ async function retrieve(auth) {
   }
 
   if (scope === 'selected') {
-    state.selectedIds = await selectedTaskIds();
+    state.selectedRows = await selectedTaskRows();
     // The API does not offer a direct bulk lookup by arbitrary task IDs.
     // Search globally rather than making one call for each list.
     for (const completed of statuses) {
       message('Locating selected tasks (' + (completed ? 'completed' : 'incomplete') + ')…');
       results.push(...await fetchStatus({}, completed));
     }
+    state.selectedIds = matchSelectedTasks(state.selectedRows, results);
     return results;
   }
 
