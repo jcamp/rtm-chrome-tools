@@ -240,10 +240,15 @@ async function selectedTaskRows() {
       // Text content stays in extension memory and is never sent anywhere
       // other than the local matching routine.
       const text=row.textContent.replace(/\s+/g,' ').trim();
+      // Extract direct text nodes, rather than aggregated text from every
+      // ancestor. Aggregated text can include other titles, tags and controls.
       const exactTexts=[];
-      for(const node of row.querySelectorAll('*')){
-        const value=(node.textContent||'').replace(/\s+/g,' ').trim();
-        if(value && value.length<=500 && !exactTexts.includes(value)) exactTexts.push(value);
+      const walker=document.createTreeWalker(row,NodeFilter.SHOW_TEXT);
+      while(walker.nextNode()){
+        const node=walker.currentNode;
+        if(node.parentElement?.closest('[role="checkbox"]'))continue;
+        const value=(node.nodeValue||'').replace(/\s+/g,' ').trim();
+        if(value && value.length<=500 && !exactTexts.includes(value))exactTexts.push(value);
       }
       rows.push({text, exactTexts});
     }
@@ -261,49 +266,31 @@ function matchSelectedTasks(selection,records) {
   const normalise=value=>String(value||'').replace(/\s+/g,' ').trim();
   for(const [index,chosen] of selection.entries()){
     const fragments=new Set(chosen.exactTexts.map(normalise).filter(Boolean));
-    const rowText=normalise(chosen.text);
-    // Look for full, exact task titles first. A title appearing as part of
-    // a longer title must not create a second candidate.
+    // Only match complete task titles to direct text nodes from the checked
+    // row. Never match an API title to a prefix of another title or to a
+    // whole row containing dates, tags and interface labels.
     let matches=records.filter(record=>fragments.has(normalise(record.name)));
     if(matches.length){
-      const maxLength=Math.max(...matches.map(row=>normalise(row.name).length));
-      matches=matches.filter(row=>normalise(row.name).length===maxLength);
-    } else {
-      // RTM sometimes splits the task title across spans. Only use a row
-      // prefix if no exact fragment matched, and prefer the longest title.
-      matches=records.filter(record=>{
-        const title=normalise(record.name);
-        return title && (rowText===title || rowText.startsWith(title+' '));
-      });
-      if(matches.length){
-        const maxLength=Math.max(...matches.map(row=>normalise(row.name).length));
-        matches=matches.filter(row=>normalise(row.name).length===maxLength);
-      }
+      const longest=Math.max(...matches.map(row=>normalise(row.name).length));
+      matches=matches.filter(row=>normalise(row.name).length===longest);
     }
-    // Multiple API records may represent the same task from different
-    // contexts. Identical task IDs represent one selection, not ambiguity.
-    const byTaskId=new Map();
-    for(const record of matches){
-      if(!byTaskId.has(String(record.id)))byTaskId.set(String(record.id),record);
-    }
-    matches=[...byTaskId.values()];
-    // Prefer a unique incomplete occurrence when earlier completed
-    // instances share the same title. Still reject unresolved ambiguity.
-    if(matches.length>1) {
+    const unique=new Map();
+    for(const record of matches)if(!unique.has(String(record.id)))unique.set(String(record.id),record);
+    matches=[...unique.values()];
+    if(matches.length>1){
       const incomplete=matches.filter(row=>!row.completed);
-      if(incomplete.length===1) matches=incomplete;
+      if(incomplete.length===1)matches=incomplete;
     }
-    if(matches.length!==1) {
-      const incomplete=matches.filter(row=>!row.completed).length;
-      const lists=new Set(matches.map(row=>String(row.listId))).size;
-      const description=matches.length
-        ? matches.length+' distinct task IDs, '+incomplete+' incomplete, across '+lists+' list(s).'
-        : 'No API title matched this row.';
+    if(matches.length!==1){
+      const detail=matches.length
+        ? matches.length+' task IDs, '+matches.filter(row=>!row.completed).length+' incomplete'
+        : 'no exact task title found in this row';
       throw new Error('Selected row '+(index+1)+' of '+selection.length+
-        ' cannot be identified uniquely: '+description+
-        ' No tasks were exported.');
+        ': '+detail+'. Export stopped to avoid an incorrect match.');
     }
-    if(ids.includes(matches[0].id))throw new Error('Multiple selected rows matched the same task. Export stopped.');
+    if(ids.includes(matches[0].id)){
+      throw new Error('Selected rows resolved to the same task ID. Export stopped.');
+    }
     ids.push(matches[0].id);
   }
   return ids;
