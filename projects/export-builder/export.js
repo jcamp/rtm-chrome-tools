@@ -48,6 +48,23 @@ function sourceMode() { return $('selectedSource').checked ? 'selected' : $('sco
  */
 async function credentials() { return chrome.storage.local.get(['apiKey','secret','token','username']); }
 /**
+ * Choose a sensible initial date format using the browser's region.
+ *
+ * Returning ISO for unrecognised regions avoids an ambiguous numeric date.
+ * Existing installations retain their previous day/month/year output until
+ * the user explicitly changes the format.
+ *
+ * @returns {'dmy'|'mdy'|'iso'|'dmy-dot'} Initial date convention.
+ */
+function browserDateFormat() {
+  const region=Intl.DateTimeFormat().resolvedOptions().locale
+    .toUpperCase().split('-').slice(-1)[0];
+  if(['US','PH'].includes(region))return 'mdy';
+  if(['DE','AT','CH'].includes(region))return 'dmy-dot';
+  if(['GB','IE','AU','NZ','ZA','IN'].includes(region))return 'dmy';
+  return 'iso';
+}
+/**
  * Save field order and UI options, but never save credentials in preferences.
  */
 async function savePreferences() {
@@ -749,8 +766,11 @@ async function init(){
   $('selectedSource').checked=pref.selectedSource===true || (pref.selectedSource===undefined && pref.scope==='selected');
   $('subtasks').checked=pref.subtasks!==false;
   $('completed').checked=Boolean(pref.completed);$('format').value=pref.format||'tsv';
-  // Existing installations retain the former UK-style date default.
-  $('dateFormat').value=['dmy','mdy','iso','dmy-dot'].includes(pref.dateFormat)?pref.dateFormat:'dmy';
+  // Preserve the prior UK convention for existing saved preferences.
+  // Fresh installations use the browser's region, with ISO as a fallback.
+  const initialDateFormat=stored.exportPreferences?'dmy':browserDateFormat();
+  $('dateFormat').value=['dmy','mdy','iso','dmy-dot'].includes(pref.dateFormat)
+    ?pref.dateFormat:initialDateFormat;
   renderFields();
   $('scope').addEventListener('change',()=>{updateTargets();markStale();});
   $('selectedSource').addEventListener('change',()=>{updateTargets();markStale();});
