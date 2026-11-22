@@ -16,7 +16,7 @@ Each extension is independent. API authorisation must be performed separately fo
 
 ## Export workflow
 
-1. Choose a **List**, **Tag**, **All tasks** or **Selected RTM tasks**.
+1. Choose a **List**, **Tag**, or **Selected RTM task**. The selected-task option accepts exactly one checked task in the chosen RTM browser tab.
 2. Optionally include nested subtasks and completed tasks.
 3. Tick and drag fields to arrange the export columns.
 4. Select CSV or TSV and click **Preview**.
@@ -30,10 +30,10 @@ Notes are combined in one cell with titles and separators. Multiline fields use 
 
 ## Important limitations
 
-- **Selected RTM tasks are experimental.** Browser selection is not part of the RTM API. This build looks for selected task IDs exposed as `data-task-id` in the current RTM web interface. RTM may not expose selection in that form. If not, the exporter fails explicitly instead of exporting the wrong tasks. This needs live testing before release.
+- **Selected RTM task is experimental.** The extension requires exactly one checked task in a chosen RTM tab and looks up its title through the read-only RTM API. Multiple checked tasks are rejected. Title extraction and matching still require live RTM verification. Ambiguous or missing matches stop the export.
 - **Original sibling order** follows task ordering in the RTM API response. Whether it matches drag-and-drop order in all RTM views needs live verification.
 - **Completed history** is available only to the extent returned by RTM's API and its filters. Completed and incomplete tasks are fetched separately for each regular list.
-- **RTM Smart Lists** aren't separate physical lists. Export a regular list, a tag, or the whole account instead.
+- **RTM Smart Lists** aren't separate physical lists. Export a regular list, a tag, or one checked task instead.
 - Some API properties may be absent. Blank cells are used for those values. The field catalogue needs a live-data audit before the extension can claim complete RTM field coverage.
 - The RTM series `url` property may be a user-supplied URL, not a dependable RTM task permalink.
 - Large exports fetch each list sequentially and may take time. A failed request stops the export rather than silently returning incomplete results.
@@ -93,3 +93,9 @@ The 0.1.4 diagnostic confirmed that RTM's selected tasks have a checked custom c
 ## Version 0.2.0: scoped selected-task requests
 
 The Selected RTM tasks mode no longer queries all tasks in the RTM account. It issues filtered `name:"..."` searches based on individual checked-row text and then resolves exact names locally. When Include nested subtasks is on, full task trees are retrieved only for the lists containing matched tasks. Transient HTTP 502 responses are retried once by the existing read-only API client. Row text extraction remains dependent on RTM's live DOM and requires user verification.
+
+## Experimental branch: single selected root (0.2.1)
+
+This branch deliberately removes the **All tasks** source and the ability to select multiple RTM root tasks. The available sources are **List**, **Tag**, and **Selected RTM task**. For the selected-task source, exactly one task must be checked in the chosen RTM tab. Its descendants are still exported recursively when **Include nested subtasks** is enabled. Completed tasks remain controlled by the existing checkbox.
+
+The list and tag sources can still export several tasks because those sources represent groups. This branch has not been merged into main. The selected-task title extraction uses the current experimental approach and is not claimed as verified against the live RTM browser interface. The read-only API does not provide an endpoint for asking which checkbox is selected in the web app.
