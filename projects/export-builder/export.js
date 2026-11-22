@@ -13,7 +13,7 @@ const FIELDS = [
 ];
 const DEFAULT_FIELDS = ['hierarchy','list','due','priority','status','tags'];
 const state = { lists: [], tags: [], fields: FIELDS.map(([id,label]) => ({ id,label,enabled:DEFAULT_FIELDS.includes(id) })),
-  records: null, output: null, dragging: null, selectedKeys: [], selectedRows: [] };
+  records: null, output: null, dragging: null, selectedKey: '', selectedRow: null };
 
 function message(text) { $('status').textContent = text; }
 async function credentials() { return chrome.storage.local.get(['apiKey','secret','token','username']); }
@@ -69,7 +69,7 @@ function renderFields() {
 }
 function updateTargets() {
   const scope=$('scope').value;
-  $('targetWrap').hidden = scope==='all'||scope==='selected';
+  $('targetWrap').hidden = scope==='selected';
   $('selectionPanel').hidden = scope!=='selected';
   if (scope==='selected') refreshTabs().catch(error => message('Cannot list RTM tabs: '+error.message));
   const choices=scope==='tag' ? state.tags.map(tag=>({id:tag,name:tag})) : state.lists;
@@ -272,46 +272,34 @@ async function selectedTaskRows() {
     return {checked:boxes.length,rows};
   }});
   const selection=injected[0]?.result;
-  if(!selection?.rows?.length)throw new Error('No selected RTM task rows were found in the chosen tab.');
-  if(selection.rows.length!==selection.checked) {
-    throw new Error('Some checked controls were not recognised as task rows. Selection is ambiguous.');
+  if(selection?.checked!==1 || selection.rows?.length!==1) {
+    throw new Error('Select exactly one RTM task, not '+(selection?.checked??0)+'.');
   }
-  return selection.rows;
+  return selection.rows[0];
 }
-function matchSelectedTasks(selection,records) {
-  const ids=[];
+// Resolve exactly one checked RTM task to one complete task identity.
+// Never assume a title is unique across lists or recurring instances.
+function matchSelectedTask(chosen,records) {
   const normalise=value=>String(value||'').replace(/\s+/g,' ').trim();
-  for(const [index,chosen] of selection.entries()){
-    const fragments=new Set(chosen.exactTexts.map(normalise).filter(Boolean));
-    // Only match complete task titles to direct text nodes from the checked
-    // row. Never match an API title to a prefix of another title or to a
-    // whole row containing dates, tags and interface labels.
-    let matches=records.filter(record=>fragments.has(normalise(record.name)));
-    if(matches.length){
-      const longest=Math.max(...matches.map(row=>normalise(row.name).length));
-      matches=matches.filter(row=>normalise(row.name).length===longest);
-    }
-    const unique=new Map();
-    for(const record of matches)if(!unique.has(String(record.id)))unique.set(String(record.id),record);
-    matches=[...unique.values()];
-    if(matches.length>1){
-      const incomplete=matches.filter(row=>!row.completed);
-      if(incomplete.length===1)matches=incomplete;
-    }
-    if(matches.length!==1){
-      const detail=matches.length
-        ? matches.length+' task IDs, '+matches.filter(row=>!row.completed).length+' incomplete'
-        : 'no exact task title found in this row';
-      throw new Error('Selected row '+(index+1)+' of '+selection.length+
-        ': '+detail+'. Export stopped to avoid an incorrect match.');
-    }
-    const selectedKey=matches[0].key || [matches[0].listId||'',matches[0].seriesId||'',matches[0].id].join(':');
-    if(ids.includes(selectedKey)){
-      throw new Error('Selected rows resolved to the same task ID. Export stopped.');
-    }
-    ids.push(selectedKey);
+  const fragments=new Set(chosen.exactTexts.map(normalise).filter(Boolean));
+  let matches=records.filter(record=>fragments.has(normalise(record.name)));
+  if(matches.length){
+    const longest=Math.max(...matches.map(row=>normalise(row.name).length));
+    matches=matches.filter(row=>normalise(row.name).length===longest);
   }
-  return ids;
+  const unique=new Map(matches.map(row=>[row.key,row]));
+  matches=[...unique.values()];
+  if(matches.length>1){
+    const incomplete=matches.filter(row=>!row.completed);
+    if(incomplete.length===1)matches=incomplete;
+  }
+  if(matches.length!==1){
+    const detail=matches.length
+      ? matches.length+' different task records matched.'
+      : 'The selected task title was not found in the API results.';
+    throw new Error(detail+' Export stopped rather than guessing.');
+  }
+  return matches[0].key;
 }
 async function retrieve(auth) {
   const scope = $('scope').value;
@@ -348,37 +336,29 @@ async function retrieve(auth) {
     return results;
   }
 
-  if (scope === 'selected') {
-    state.selectedRows = await selectedTaskRows();
-    // Search by a title fragment from each selected row. Do not retrieve the
-    // entire RTM account merely because two checkboxes are selected.
-    // The API name: operator searches task titles, then local matching checks
-    // exact titles. An incorrect hint causes a clear error, not a wrong export.
-    for (let index=0; index<state.selectedRows.length; index++){
-      const chosen=state.selectedRows[index];
-      const candidates=chosen.exactTexts
-        .map(value=>String(value).replace(/\s+/g,' ').trim())
-        .filter(value=>value.length>=4 && value.length<=250)
-        .sort((a,b)=>b.length-a.length);
-      const hint=candidates[0];
-      if(!hint)throw new Error('Selected row '+(index+1)+' has no readable task title.');
-      const safeHint=hint.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
-      for(const completed of statuses){
-        message('Looking up selected task '+(index+1)+' of '+state.selectedRows.length+'…');
-        results.push(...await fetchStatus({filter:'name:"'+safeHint+'"'},completed));
-      }
+  if(scope==='selected') {
+    state.selectedRow=await selectedTaskRows();
+    const candidates=state.selectedRow.exactTexts
+      .map(value=>String(value).replace(/\s+/g,' ').trim())
+      .filter(value=>value.length>=4 && value.length<=250)
+      .sort((a,b)=>b.length-a.length);
+    const hint=candidates[0];
+    if(!hint)throw new Error('The selected RTM task has no readable title.');
+    const safeHint=hint.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+    for(const completed of statuses){
+      message('Looking up the selected RTM task…');
+      results.push(...await fetchStatus({filter:'name:"'+safeHint+'"'},completed));
     }
     const unique=new Map(results.map(row=>[row.key,row]));
-    const records=[...unique.values()];
-    state.selectedKeys=matchSelectedTasks(state.selectedRows,records);
-    if(!includeChildren)return records;
+    state.selectedKey=matchSelectedTask(state.selectedRow,[...unique.values()]);
+    if(!includeChildren)return [...unique.values()];
 
-    // Fetch full hierarchy only from lists containing matched tasks.
-    const relevant=new Set(records.filter(row=>state.selectedKeys.includes(row.key)).map(row=>row.listId));
-    for(const listId of relevant){
-      message('Loading nested subtasks from selected task list…');
-      for(const completed of statuses){
-        for(const row of await fetchStatus({list_id:listId},completed))unique.set(row.key,row);
+    // Fetch descendants only from the chosen task's list.
+    const chosen=unique.get(state.selectedKey);
+    message('Loading nested subtasks from '+chosen.list+'…');
+    for(const completed of statuses){
+      for(const row of await fetchStatus({list_id:chosen.listId},completed)){
+        unique.set(row.key,row);
       }
     }
     return [...unique.values()];
@@ -409,21 +389,13 @@ async function retrieve(auth) {
     return listResults;
   }
 
-  if (scope === 'all') {
-    for (const completed of statuses) {
-      message('Retrieving all ' + (completed ? 'completed' : 'incomplete') + ' tasks…');
-      results.push(...await fetchStatus({}, completed));
-    }
-    return results;
-  }
 
   throw new Error('Unknown export source.');
 }
 function selectRows(records) {
   const scope=$('scope').value;
   const includeChildren=$('subtasks').checked;
-  const selectedKeys=new Set(state.selectedKeys);
-  const selectedOrder=new Map(state.selectedKeys.map((key,index)=>[key,index]));
+  const selectedKey=state.selectedKey;
   const byScopedId=new Map();
   const children=new Map();
 
@@ -439,12 +411,10 @@ function selectRows(records) {
       children.get(parent).push(row);
     }
   }
-  const isMatch=row=>scope==='all'||scope==='list'||
+  const isMatch=row=>scope==='list'||
     (scope==='tag'&&row.tags.some(t=>t.toLowerCase()===$('target').value.toLowerCase()))||
-    (scope==='selected'&&selectedKeys.has(row.key));
+    (scope==='selected'&&selectedKey===row.key);
   const matched=records.filter(isMatch);
-  if(scope==='selected')matched.sort((a,b)=>
-    (selectedOrder.get(a.key)??Infinity)-(selectedOrder.get(b.key)??Infinity));
 
   const output=[],visited=new Set();
   function visit(row,level) {
@@ -592,7 +562,7 @@ async function init(){
   const stored=await chrome.storage.local.get('exportPreferences');
   const pref=stored.exportPreferences||{};
   restoreFields(pref.fields);
-  $('scope').value=pref.scope||'list';$('subtasks').checked=pref.subtasks!==false;
+  $('scope').value=['list','tag','selected'].includes(pref.scope)?pref.scope:'list';$('subtasks').checked=pref.subtasks!==false;
   $('completed').checked=Boolean(pref.completed);$('format').value=pref.format||'tsv';
   renderFields();
   $('scope').addEventListener('change',()=>{updateTargets();markStale();});
