@@ -19,7 +19,17 @@
 <!-- Output fields are generated from the FIELDS catalogue in export.js. -->
 <section><div class="between"><h2>2. Fields and order</h2><div class="actions"><button id="allFields" class="quiet">Select all</button><button id="defaults" class="quiet">Defaults</button></div></div><p class="hint">Drag the handle to change the column order. Task hierarchy automatically expands into as many columns as needed.</p><div id="fields" class="fields"></div></section>
 <!-- Download format does not affect Copy, which always uses TSV. -->
-<section><h2>3. Format</h2><label>Download format <select id="format"><option value="tsv">Tab-delimited (TSV)</option><option value="csv">Comma-delimited (CSV)</option></select></label></section>
+<section><h2>3. Format</h2>
+<div class="formrow">
+<label>Download format <select id="format"><option value="tsv">Tab-delimited (TSV)</option><option value="csv">Comma-delimited (CSV)</option></select></label>
+<label>Date format <select id="dateFormat">
+<option value="dmy">DD/MM/YYYY (UK)</option>
+<option value="mdy">MM/DD/YYYY (US)</option>
+<option value="iso">YYYY-MM-DD (ISO 8601)</option>
+<option value="dmy-dot">DD.MM.YYYY (European)</option>
+</select></label>
+</div>
+<p class="hint">Date formats apply to all date columns. Timestamps use your browser's local timezone.</p></section>
 <!-- Preview displays ten rows; Copy and Download use the complete table. -->
 <section><div class="between"><h2>4. Preview</h2><div class="actions"><button id="preview" class="primary">Preview</button><button id="copy" disabled>Copy TSV</button><button id="download" disabled>Download</button></div></div>
 <p id="status" role="status">Connect to RTM to begin.</p><div id="summary" class="hint"></div><div id="previewWrap" class="preview"><table><thead id="head"></thead><tbody id="rows"></tbody></table></div></section>
