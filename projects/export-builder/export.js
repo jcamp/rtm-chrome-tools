@@ -54,7 +54,8 @@ async function savePreferences() {
   await chrome.storage.local.set({ exportPreferences: {
     fields: state.fields.map(({id,enabled}) => ({id,enabled})),
     scope:$('scope').value, selectedSource:$('selectedSource').checked,
-    subtasks:$('subtasks').checked, completed:$('completed').checked, format:$('format').value
+    subtasks:$('subtasks').checked, completed:$('completed').checked,
+    format:$('format').value, dateFormat:$('dateFormat').value
   } });
 }
 /**
@@ -160,15 +161,42 @@ function plainNote(note) {
   return typeof value === 'string' ? value : String(value ?? '');
 }
 /**
- * Format an RTM date as DD/MM/YYYY in Europe/London, accounting for daylight-saving dates.
- * @param {string} value RTM date/time string.
- * @returns {string} British calendar date or the original invalid value.
+ * Format an RTM date according to the user's selected display convention.
+ *
+ * A YYYY-MM-DD date-only value is a calendar date and must not shift with
+ * timezone conversion. Timestamps are displayed in the browser's local
+ * timezone, rather than always using Europe/London.
+ *
+ * @param {string} value RTM date-only string or ISO timestamp.
+ * @param {'dmy'|'mdy'|'iso'|'dmy-dot'} format Selected date convention.
+ * @returns {string} Date without time, or the source string if invalid.
  */
-function ukDate(value) {
+function formatDate(value, format) {
   if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+  const input=String(value);
+  let parts;
+
+  // Date-only strings have no timezone. Preserve their calendar components.
+  const dateOnly=/^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(input);
+  if(dateOnly){
+    const date=new Date(input+'T00:00:00Z');
+    if(Number.isNaN(date.getTime()) || date.toISOString().slice(0,10)!==input) return input;
+    parts={year:dateOnly[1],month:dateOnly[2],day:dateOnly[3]};
+  } else {
+    const date=new Date(input);
+    if(Number.isNaN(date.getTime()))return input;
+    const values=new Intl.DateTimeFormat('en-GB',{
+      year:'numeric',month:'2-digit',day:'2-digit'
+    }).formatToParts(date);
+    parts=Object.fromEntries(values.map(part=>[part.type,part.value]));
+  }
+
+  switch(format){
+    case 'mdy':return parts.month+'/'+parts.day+'/'+parts.year;
+    case 'iso':return parts.year+'-'+parts.month+'-'+parts.day;
+    case 'dmy-dot':return parts.day+'.'+parts.month+'.'+parts.year;
+    default:return parts.day+'/'+parts.month+'/'+parts.year;
+  }
 }
 /**
  * Map RTM's empty-priority markers (N or 0) to the word None.
@@ -583,8 +611,8 @@ function headersAndValues(rows) {
           case 'taskId':return row.id;
           case 'parentId':return row.parentId;
           case 'level':return String(row.level);
-          case 'completed':return ukDate(row.completedAt);
-          case 'due':case 'start':case 'created':case 'modified':return ukDate(row[field.id]);
+          case 'completed':return formatDate(row.completedAt,$('dateFormat').value);
+          case 'due':case 'start':case 'created':case 'modified':return formatDate(row[field.id],$('dateFormat').value);
           default:return row[field.id]??'';
         }
       });
@@ -721,6 +749,8 @@ async function init(){
   $('selectedSource').checked=pref.selectedSource===true || (pref.selectedSource===undefined && pref.scope==='selected');
   $('subtasks').checked=pref.subtasks!==false;
   $('completed').checked=Boolean(pref.completed);$('format').value=pref.format||'tsv';
+  // Existing installations retain the former UK-style date default.
+  $('dateFormat').value=['dmy','mdy','iso','dmy-dot'].includes(pref.dateFormat)?pref.dateFormat:'dmy';
   renderFields();
   $('scope').addEventListener('change',()=>{updateTargets();markStale();});
   $('selectedSource').addEventListener('change',()=>{updateTargets();markStale();});
@@ -731,7 +761,7 @@ async function init(){
     try{await navigator.clipboard.writeText($('selectionDiagnostic').textContent);message('Structural diagnostic copied.');}
     catch(error){message('Could not copy diagnostic: '+error.message);}
   });
-  for(const id of ['target','subtasks','completed','format'])$(id).addEventListener('change',markStale);
+  for(const id of ['target','subtasks','completed','format','dateFormat'])$(id).addEventListener('change',markStale);
   $('allFields').addEventListener('click',()=>{state.fields.forEach(field=>field.enabled=true);renderFields();markStale();});
   $('defaults').addEventListener('click',()=>{state.fields=FIELDS.map(([id,label])=>({id,label,enabled:DEFAULT_FIELDS.includes(id)}));renderFields();markStale();});
   $('authorise').addEventListener('click',connectStart);
