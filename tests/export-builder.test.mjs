@@ -240,6 +240,9 @@ test('the chosen date format applies to every date column', () => {
       completed:'2026-08-28',priority:'N'}
   }]}}}
   const rows=exporter.selectRows(exporter.normaliseResponse(source,new Map()))
+  const priorFields=exporter.state.fields.map(field=>field.enabled)
+  const dateFields=new Set(['due','start','completed','created','modified'])
+  for(const field of exporter.state.fields)field.enabled=dateFields.has(field.id)
   const expected={
     dmy:['26/08/2026','27/08/2026','28/08/2026','24/08/2026','25/08/2026'],
     mdy:['08/26/2026','08/27/2026','08/28/2026','08/24/2026','08/25/2026'],
@@ -252,6 +255,7 @@ test('the chosen date format applies to every date column', () => {
     const columns=['Due date','Start date','Completed date','Created date','Modified date']
     assert.deepEqual(columns.map(title=>out.values[0][out.headings.indexOf(title)]),values)
   }
+  exporter.state.fields.forEach((field,index)=>field.enabled=priorFields[index])
   inputs.dateFormat.value='dmy'
 })
 
