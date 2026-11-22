@@ -18,7 +18,7 @@ const call = async (method,params) => {
   return apiHandler(params)
 }
 const inputs = {
-  scope: { value: 'list' }, target: { value: '1' },
+  scope: { value: 'list' }, selectedSource: { checked: false }, target: { value: '1' },
   subtasks: { checked: true }, completed: { checked: false },
   rtmTab: { value: '9' },
   status: { textContent: '' }
@@ -32,7 +32,7 @@ const chrome = {
 const create = new Function(
   'document','chrome','startAuthorisation','finishAuthorisation',
   'getLists','getTags','getTasksForList','call',
-  body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state, matchSelectedTask, retrieve, selectedTaskRows };'
+  body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state, matchSelectedTask, retrieve, selectedTaskRows, sourceMode };'
 )
 const exporter = create(
   { getElementById: id => inputs[id] || {} },
@@ -53,6 +53,8 @@ function root(title) {
 }
 
 test('recursive hierarchy uses a separate column for each level', () => {
+  inputs.selectedSource.checked=false
+  inputs.selectedSource.checked=false
   inputs.scope.value='list'
   const rows=exporter.selectRows(exporter.normaliseResponse(response,new Map([['1','Inbox']])))
   assert.deepEqual(rows.map(row=>row.level),[0,1,2])
@@ -63,7 +65,7 @@ test('recursive hierarchy uses a separate column for each level', () => {
 })
 
 test('exactly one selected root can export recursive descendants', () => {
-  inputs.scope.value='selected'
+  inputs.selectedSource.checked=true
   inputs.subtasks.checked=true
   exporter.state.selectedKey='1:a:100'
   const rows=exporter.selectRows(exporter.normaliseResponse(response,new Map()))
@@ -71,7 +73,7 @@ test('exactly one selected root can export recursive descendants', () => {
 })
 
 test('selected root without nested subtasks exports only that root', () => {
-  inputs.scope.value='selected'
+  inputs.selectedSource.checked=true
   inputs.subtasks.checked=false
   exporter.state.selectedKey='1:a:100'
   const rows=exporter.selectRows(exporter.normaliseResponse(response,new Map()))
@@ -80,7 +82,7 @@ test('selected root without nested subtasks exports only that root', () => {
 })
 
 test('selected task identity cannot match another list with the same task ID', () => {
-  inputs.scope.value='selected'
+  inputs.selectedSource.checked=true
   inputs.subtasks.checked=false
   exporter.state.selectedKey='1:a:10'
   const rows=[
@@ -92,7 +94,7 @@ test('selected task identity cannot match another list with the same task ID', (
 })
 
 test('nested subtasks never cross RTM lists', () => {
-  inputs.scope.value='selected'
+  inputs.selectedSource.checked=true
   inputs.subtasks.checked=true
   exporter.state.selectedKey='1:a:1'
   const rows=[
@@ -136,7 +138,7 @@ test('one incomplete recurring instance is chosen over older completed occurrenc
 })
 
 test('selected zero or multiple tasks are rejected before any API call', async () => {
-  inputs.scope.value='selected'
+  inputs.selectedSource.checked=true
   inputs.subtasks.checked=false
   calls.length=0
   selectedRows=[]
@@ -147,7 +149,7 @@ test('selected zero or multiple tasks are rejected before any API call', async (
 })
 
 test('one selected task uses a name-filtered API request', async () => {
-  inputs.scope.value='selected'
+  inputs.selectedSource.checked=true
   inputs.subtasks.checked=false
   inputs.completed.checked=false
   calls.length=0
@@ -164,7 +166,7 @@ test('one selected task uses a name-filtered API request', async () => {
 })
 
 test('selected root fetches descendants from its list only', async () => {
-  inputs.scope.value='selected'
+  inputs.selectedSource.checked=true
   inputs.subtasks.checked=true
   inputs.completed.checked=false
   calls.length=0
@@ -180,6 +182,7 @@ test('selected root fetches descendants from its list only', async () => {
 })
 
 test('list and tag sources retain scoped API requests', async () => {
+  inputs.selectedSource.checked=false
   inputs.scope.value='list'
   inputs.target.value='1'
   inputs.subtasks.checked=false
@@ -189,6 +192,7 @@ test('list and tag sources retain scoped API requests', async () => {
   assert.equal(calls.length,1)
   assert.equal(calls[0].params.list_id,'1')
 
+  inputs.selectedSource.checked=false
   inputs.scope.value='tag'
   inputs.target.value='will'
   calls.length=0
@@ -198,6 +202,7 @@ test('list and tag sources retain scoped API requests', async () => {
 })
 
 test('API 502 failure stops the export and reports the error', async () => {
+  inputs.selectedSource.checked=false
   inputs.scope.value='list'
   inputs.target.value='1'
   calls.length=0
@@ -207,6 +212,7 @@ test('API 502 failure stops the export and reports the error', async () => {
 })
 
 test('notes and spreadsheet escaping are preserved', () => {
+  inputs.selectedSource.checked=false
   inputs.scope.value='list'
   const rows=exporter.normaliseResponse(response,new Map())
   assert.equal(rows[1].notes[0].body,'Line 1\nLine 2')
@@ -216,6 +222,8 @@ test('notes and spreadsheet escaping are preserved', () => {
 })
 
 test('UK date fields omit time and preserve the UK calendar date', () => {
+  inputs.selectedSource.checked=false
+  inputs.selectedSource.checked=false
   inputs.scope.value='list'
   const source={tasks:{list:{id:'1',taskseries:[
     {id:'s',name:'Summer',task:{id:'201',due:'2026-08-24T23:00:00Z',priority:'N'}},
@@ -225,4 +233,32 @@ test('UK date fields omit time and preserve the UK calendar date', () => {
   const out=exporter.headersAndValues(rows)
   const due=out.headings.indexOf('Due date')
   assert.deepEqual(out.values.map(row=>row[due]),['25/08/2026','25/11/2026'])
+})
+
+test('selected task checkbox overrides the List or Tag dropdown', () => {
+  inputs.scope.value='tag'
+  inputs.selectedSource.checked=false
+  assert.equal(exporter.sourceMode(),'tag')
+  inputs.selectedSource.checked=true
+  assert.equal(exporter.sourceMode(),'selected')
+  inputs.selectedSource.checked=false
+  inputs.scope.value='list'
+  assert.equal(exporter.sourceMode(),'list')
+})
+
+test('selected task mode ignores the current List or Tag value for retrieval', async () => {
+  inputs.scope.value='tag'
+  inputs.selectedSource.checked=true
+  inputs.subtasks.checked=false
+  inputs.completed.checked=false
+  selectedRows=[root('Parent')]
+  calls.length=0
+  apiHandler=()=>({tasks:{list:{id:'1',taskseries:{
+    id:'a',name:'Parent',task:{id:'100',completed:''}
+  }}}})
+  await exporter.retrieve({})
+  assert.equal(calls.length,1)
+  assert.match(calls[0].params.filter,/name:"Parent"/)
+  assert.equal(exporter.state.selectedKey,'1:a:100')
+  inputs.selectedSource.checked=false
 })
