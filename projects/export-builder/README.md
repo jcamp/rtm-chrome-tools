@@ -107,3 +107,7 @@ The list and tag sources can still export several tasks because those sources re
 ## Selected RTM task checkbox (experimental 0.2.2)
 
 The Source dropdown contains **List** and **Tag** only. Beneath it, a separate **Or source = Selected RTM task** checkbox makes a single checked RTM task the export source. When checked, the List/Tag controls are hidden and the RTM browser tab selector is shown. Unchecking restores the previous List/Tag choice. This setting is saved between uses. **Include nested subtasks** and **Include completed tasks** remain available for all three source modes. A previous saved `scope: selected` setting is migrated to the new checkbox on first load.
+
+## Configurable date formats
+
+Use **3. Format → Date format** to choose DD/MM/YYYY (UK), MM/DD/YYYY (US), YYYY-MM-DD (ISO 8601) or DD.MM.YYYY (European). The selection applies to due, start, completed, created and modified dates in both clipboard and downloaded exports. New installations use the browser's regional convention where recognised, otherwise ISO. Existing installations keep the former UK convention until the date setting is changed. Date-only fields are not timezone-shifted, and timestamp fields use the browser's local timezone.
