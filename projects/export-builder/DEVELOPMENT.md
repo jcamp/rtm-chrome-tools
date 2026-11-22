@@ -65,8 +65,8 @@ Never log API secrets or the user's access token.
 - Task data is processed locally after the RTM read-only API request.
 - `safeCell()` prefixes formula-like spreadsheet values with a literal apostrophe. This intentionally changes the exported representation, not the original task.
 - `serialise()` quotes delimiters and newlines. Both CSV and TSV are exported with CRLF row endings.
-- Date output uses the Europe/London calendar day and British DD/MM/YYYY formatting.
-- The copy action always uses TSV, while the download action uses the chosen file format.
+- Date format is selected in the Format section: DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, or DD.MM.YYYY. Date-only values retain their calendar day. Timestamp values are displayed in the browser's local timezone, avoiding a fixed UK timezone.
+- The copy action always uses TSV, while the download action uses the chosen file format. Date format applies to both copied and downloaded data and is saved with UI preferences.
 - The preview may truncate display text. Copy and Download use the complete prepared table.
 
 ## Tests and release checks
@@ -80,3 +80,11 @@ node --test tests/export-builder.test.mjs tests/export-builder-api.test.mjs
 GitHub Actions runs the same tests on changes to the exporter. These tests use synthetic RTM data and mocked browser/API responses. They cannot prove the title selector works with live RTM HTML.
 
 Before merging changes, review that List/Tag exports still work, exactly one selected task can be exported with and without nested subtasks, duplicate names are rejected, notes and dates are represented correctly, and no task-changing RTM method has been added. Record live browser checks separately from automated tests.
+
+## Date format setting
+
+The **Date format** dropdown controls the display of due, start, completed, created and modified dates. Available formats are **DD/MM/YYYY (UK)**, **MM/DD/YYYY (US)**, **YYYY-MM-DD (ISO 8601)** and **DD.MM.YYYY (European)**. The formatting function is documented in `export.js` as `formatDate(value, format)`.
+
+New installations choose an initial date format based on the browser's regional locale, defaulting to ISO when no recognised region is available. Existing installations without a saved date-format setting retain the former DD/MM/YYYY default, avoiding an unexpected change to previously generated exports. Changing the date format invalidates the preview and persists the new choice.
+
+Date-only strings have no timezone and are never converted. ISO timestamps are converted to the browser's local date before formatting. Time values are deliberately excluded from the export date columns. This means travelling to a different timezone may change the calendar day for timestamp fields, but never for date-only values.
