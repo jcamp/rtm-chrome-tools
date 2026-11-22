@@ -7,15 +7,47 @@
 <div class="actions"><button id="authorise">Authorise in RTM</button><button id="finish">I've authorised access</button></div></section>
 <!-- Connected identity and credential reset control. -->
 <section id="connected" hidden><div class="between"><p>Connected as <strong id="username"></strong></p><button id="disconnect" class="quiet">Disconnect</button></div></section>
-<!-- Source selection: the separate checkbox overrides List or Tag. -->
-<section><h2>1. Select tasks</h2><div id="sourceControls" class="formrow"><label>Source <select id="scope"><option value="list">List</option><option value="tag">Tag</option></select></label>
-<label id="targetWrap">List or tag <select id="target"></select></label></div>
-<div class="source-option"><label><input type="checkbox" id="selectedSource"> Or source = Selected RTM task</label></div>
-<!-- Selected task is taken from the chosen RTM browser tab, not the export tab. -->
-<div id="selectionPanel" hidden>
-<div class="formrow"><label>RTM browser tab <select id="rtmTab"></select></label><div class="tab-refresh"><button id="refreshTabs" type="button">Refresh tabs</button></div></div>
-<p id="selectionHelp" class="hint">Tick exactly one task in the chosen RTM tab. Nested subtasks are included if enabled. Use Inspect selection if Preview cannot identify the task. The optional diagnostic may include task titles, so review it before sharing.</p><div class="actions"><button id="inspectSelection" type="button">Inspect selection</button><button id="copyInspection" type="button" hidden>Copy diagnostic</button></div><pre id="selectionDiagnostic" class="diagnostic" hidden></pre></div>
-<div class="options"><label><input type="checkbox" id="subtasks" checked> Include nested subtasks</label><label><input type="checkbox" id="completed"> Include completed tasks</label></div></section>
+<!-- Keep the List/Tag controls and all three checkboxes in fixed positions. -->
+<section>
+  <h2>1. Select tasks</h2>
+
+  <div id="sourceControls" class="formrow">
+    <label>Source
+      <select id="scope">
+        <option value="list">List</option>
+        <option value="tag">Tag</option>
+      </select>
+    </label>
+    <label id="targetWrap">List or tag
+      <select id="target"></select>
+    </label>
+  </div>
+
+  <!-- Selected task overrides the dropdown, without moving any controls. -->
+  <div class="options">
+    <label><input type="checkbox" id="selectedSource"> Or source = Selected RTM task</label>
+    <label><input type="checkbox" id="subtasks" checked> Include nested subtasks</label>
+    <label><input type="checkbox" id="completed"> Include completed tasks</label>
+  </div>
+
+  <!-- The browser tab controls appear below the options only in selected mode. -->
+  <div id="selectionPanel" hidden>
+    <div class="formrow tab-row">
+      <label>RTM browser tab
+        <select id="rtmTab"></select>
+      </label>
+      <div class="tab-refresh">
+        <button id="refreshTabs" type="button">Refresh tabs</button>
+      </div>
+    </div>
+    <p id="selectionHelp" class="hint">Tick exactly one task in the chosen RTM tab. Nested subtasks are included if enabled. Use Inspect selection if Preview cannot identify the task. The optional diagnostic may include task titles, so review it before sharing.</p>
+    <div class="actions">
+      <button id="inspectSelection" type="button">Inspect selection</button>
+      <button id="copyInspection" type="button" hidden>Copy diagnostic</button>
+    </div>
+    <pre id="selectionDiagnostic" class="diagnostic" hidden></pre>
+  </div>
+</section>
 <!-- Output fields are generated from the FIELDS catalogue in export.js. -->
 <section><div class="between"><h2>2. Fields and order</h2><div class="actions"><button id="allFields" class="quiet">Select all</button><button id="defaults" class="quiet">Defaults</button></div></div><p class="hint">Drag the handle to change the column order. Task hierarchy automatically expands into as many columns as needed.</p><div id="fields" class="fields"></div></section>
 <!-- Download format does not affect Copy, which always uses TSV. -->
