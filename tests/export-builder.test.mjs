@@ -296,3 +296,23 @@ test('selected task mode ignores the current List or Tag value for retrieval', a
   assert.equal(exporter.state.selectedKey,'1:a:100')
   inputs.selectedSource.checked=false
 })
+
+test('source controls and all three checkboxes retain a fixed layout', async () => {
+  const html=await readFile(new URL('../projects/export-builder/export.html',import.meta.url),'utf8')
+  const css=await readFile(new URL('../projects/export-builder/export.css',import.meta.url),'utf8')
+
+  // The controls are present regardless of the chosen source. Visibility
+  // changes only for the optional browser-tab panel below the options.
+  const source=html.indexOf('id="sourceControls"')
+  const options=html.indexOf('class="options"')
+  const selected=html.indexOf('id="selectedSource"')
+  const nested=html.indexOf('id="subtasks"')
+  const completed=html.indexOf('id="completed"')
+  const panel=html.indexOf('id="selectionPanel"')
+
+  assert.equal(source>=0 && source<options,true)
+  assert.equal(options<selected && selected<nested && nested<completed,true)
+  assert.equal(completed<panel,true)
+  assert.match(css,/\.tab-row\s*\{[^}]*align-items:end/)
+  assert.match(css,/\.options\s+label,\.field\s+label\s*\{[^}]*font-weight:400/)
+})
