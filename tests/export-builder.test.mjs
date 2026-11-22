@@ -20,7 +20,7 @@ const call = async (method,params) => {
 const inputs = {
   scope: { value: 'list' }, selectedSource: { checked: false }, target: { value: '1' },
   subtasks: { checked: true }, completed: { checked: false },
-  rtmTab: { value: '9' },
+  rtmTab: { value: '9' }, dateFormat: {value:'dmy'},
   status: { textContent: '' }
 }
 const chrome = {
@@ -32,7 +32,7 @@ const chrome = {
 const create = new Function(
   'document','chrome','startAuthorisation','finishAuthorisation',
   'getLists','getTags','getTasksForList','call',
-  body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state, matchSelectedTask, retrieve, selectedTaskRows, sourceMode };'
+  body + '\nreturn { normaliseResponse, selectRows, headersAndValues, serialise, state, matchSelectedTask, retrieve, selectedTaskRows, sourceMode, formatDate, browserDateFormat };'
 )
 const exporter = create(
   { getElementById: id => inputs[id] || {} },
@@ -221,18 +221,48 @@ test('notes and spreadsheet escaping are preserved', () => {
   assert.match(exporter.serialise(['Task'],[['=1+1']],'csv'),/'=1\+1/)
 })
 
-test('UK date fields omit time and preserve the UK calendar date', () => {
-  inputs.selectedSource.checked=false
+test('date-only values stay on their calendar day in every format', () => {
+  assert.equal(exporter.formatDate('2026-08-24','dmy'),'24/08/2026')
+  assert.equal(exporter.formatDate('2026-08-24','mdy'),'08/24/2026')
+  assert.equal(exporter.formatDate('2026-08-24','iso'),'2026-08-24')
+  assert.equal(exporter.formatDate('2026-08-24','dmy-dot'),'24.08.2026')
+  assert.equal(exporter.formatDate('2026-02-30','iso'),'2026-02-30')
+  assert.equal(exporter.formatDate('', 'iso'),'')
+  assert.equal(exporter.formatDate('invalid', 'dmy'),'invalid')
+})
+
+test('the chosen date format applies to every date column', () => {
   inputs.selectedSource.checked=false
   inputs.scope.value='list'
-  const source={tasks:{list:{id:'1',taskseries:[
-    {id:'s',name:'Summer',task:{id:'201',due:'2026-08-24T23:00:00Z',priority:'N'}},
-    {id:'w',name:'Winter',task:{id:'202',due:'2026-11-25T00:00:00Z',priority:'1'}}
-  ]}}}
+  const source={tasks:{list:{id:'1',taskseries:[{
+    id:'s',name:'One task',created:'2026-08-24',modified:'2026-08-25',
+    task:{id:'201',due:'2026-08-26',start:'2026-08-27',
+      completed:'2026-08-28',priority:'N'}
+  }]}}}
   const rows=exporter.selectRows(exporter.normaliseResponse(source,new Map()))
-  const out=exporter.headersAndValues(rows)
-  const due=out.headings.indexOf('Due date')
-  assert.deepEqual(out.values.map(row=>row[due]),['25/08/2026','25/11/2026'])
+  const expected={
+    dmy:['26/08/2026','27/08/2026','28/08/2026','24/08/2026','25/08/2026'],
+    mdy:['08/26/2026','08/27/2026','08/28/2026','08/24/2026','08/25/2026'],
+    iso:['2026-08-26','2026-08-27','2026-08-28','2026-08-24','2026-08-25'],
+    'dmy-dot':['26.08.2026','27.08.2026','28.08.2026','24.08.2026','25.08.2026']
+  }
+  for(const [format,values] of Object.entries(expected)){
+    inputs.dateFormat.value=format
+    const out=exporter.headersAndValues(rows)
+    const columns=['Due date','Start date','Completed date','Created date','Modified date']
+    assert.deepEqual(columns.map(title=>out.values[0][out.headings.indexOf(title)]),values)
+  }
+  inputs.dateFormat.value='dmy'
+})
+
+test('timestamps use browser-local date instead of hard-coded UK timezone', () => {
+  const timestamp='2026-08-24T23:00:00Z'
+  const date=new Date(timestamp)
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{
+    year:'numeric',month:'2-digit',day:'2-digit'
+  }).formatToParts(date).map(part=>[part.type,part.value]))
+  assert.equal(exporter.formatDate(timestamp,'iso'),
+    parts.year+'-'+parts.month+'-'+parts.day)
 })
 
 test('selected task checkbox overrides the List or Tag dropdown', () => {
