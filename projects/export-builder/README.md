@@ -4,6 +4,10 @@ Standalone read-only Chrome extension for configurable Remember The Milk CSV and
 
 **Version 0.1.0: initial test build, with fixes following first live user feedback.**
 
+## Developer documentation
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for module responsibilities, code flow, composite task identity, selected-task matching limitations, API failure handling, spreadsheet safety, and how to run the regression tests. The implementation also has function-level JSDoc comments.
+
 ## Install
 
 1. Download or clone [rtm-chrome-tools](https://github.com/jcamp/rtm-chrome-tools).
