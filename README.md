@@ -10,7 +10,7 @@ Each extension lives in its own folder and can be installed independently. The r
 | --- | --- |
 | [RTM Chrome Tools starter](projects/rtm-chrome-tools/) | Initial working test popup. Does not connect to RTM or change tasks. |
 | [Tag & List Relationships](projects/tag-list-relationships/) | Read-only RTM lists and tags dashboard (initial version). |
-| [RTM Export Builder](projects/export-builder/) | Independent configurable CSV/TSV export utility (initial test build). |
+| [RTM Export Builder](projects/export-builder/README.md) | Read-only List, Tag or single selected-task export to CSV/TSV, with nested subtasks and configurable date formats. |
 
 ## Reusable skeleton
 
@@ -23,7 +23,7 @@ Each extension lives in its own folder and can be installed independently. The r
 3. Select **Load unpacked**.
 4. Select the folder of the extension you want to install, containing its own `manifest.json` (for the RTM starter: `projects/rtm-chrome-tools`).
 
-See each extension's own README for its usage and documentation.
+For complete RTM Export Builder download, API setup and operating instructions, see **[RTM Export Builder: Installation and User Guide](projects/export-builder/README.md)**. Its folder can also be downloaded separately using [Download GitHub Directory](https://download-directory.github.io/).
 
 ## Licence
 
