@@ -5,8 +5,9 @@
 <div class="formrow"><label>API key <input id="apiKey" autocomplete="off"></label><label>Shared secret <input id="secret" type="password" autocomplete="off"></label></div>
 <div class="actions"><button id="authorise">Authorise in RTM</button><button id="finish">I've authorised access</button></div></section>
 <section id="connected" hidden><div class="between"><p>Connected as <strong id="username"></strong></p><button id="disconnect" class="quiet">Disconnect</button></div></section>
-<section><h2>1. Select tasks</h2><div class="formrow"><label>Source <select id="scope"><option value="list">List</option><option value="tag">Tag</option><option value="selected">Selected RTM task</option></select></label>
+<section><h2>1. Select tasks</h2><div id="sourceControls" class="formrow"><label>Source <select id="scope"><option value="list">List</option><option value="tag">Tag</option></select></label>
 <label id="targetWrap">List or tag <select id="target"></select></label></div>
+<div class="source-option"><label><input type="checkbox" id="selectedSource"> Or source = Selected RTM task</label></div>
 <div id="selectionPanel" hidden>
 <div class="formrow"><label>RTM browser tab <select id="rtmTab"></select></label><div class="tab-refresh"><button id="refreshTabs" type="button">Refresh tabs</button></div></div>
 <p id="selectionHelp" class="hint">Tick exactly one task in the chosen RTM tab. Nested subtasks are included if enabled. Use Inspect selection if Preview cannot identify the task. The optional diagnostic may include task titles, so review it before sharing.</p><div class="actions"><button id="inspectSelection" type="button">Inspect selection</button><button id="copyInspection" type="button" hidden>Copy diagnostic</button></div><pre id="selectionDiagnostic" class="diagnostic" hidden></pre></div>
