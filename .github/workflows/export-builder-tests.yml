@@ -1,0 +1,24 @@
+name: RTM Export Builder tests
+
+on:
+  push:
+    paths:
+      - 'projects/export-builder/**'
+      - 'tests/export-builder*.test.mjs'
+      - '.github/workflows/export-builder-tests.yml'
+  pull_request:
+    paths:
+      - 'projects/export-builder/**'
+      - 'tests/export-builder*.test.mjs'
+      - '.github/workflows/export-builder-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run exporter tests
+        run: node --test tests/export-builder.test.mjs tests/export-builder-api.test.mjs

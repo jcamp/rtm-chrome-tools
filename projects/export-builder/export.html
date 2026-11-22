@@ -1,18 +1,68 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RTM Export Builder</title><link rel="stylesheet" href="export.css"></head>
 <body><main><header><h1>RTM Export Builder</h1><p>Choose tasks, arrange fields, preview and export. Your RTM data is never changed.</p></header>
+<!-- Read-only RTM authorisation. Hidden after a token has been saved. -->
 <section id="setup"><h2>Connect to RTM</h2><p>Use your RTM API key and shared secret. Authorisation requests read-only access.</p>
 <div class="formrow"><label>API key <input id="apiKey" autocomplete="off"></label><label>Shared secret <input id="secret" type="password" autocomplete="off"></label></div>
 <div class="actions"><button id="authorise">Authorise in RTM</button><button id="finish">I've authorised access</button></div></section>
+<!-- Connected identity and credential reset control. -->
 <section id="connected" hidden><div class="between"><p>Connected as <strong id="username"></strong></p><button id="disconnect" class="quiet">Disconnect</button></div></section>
-<section><h2>1. Select tasks</h2><div class="formrow"><label>Source <select id="scope"><option value="list">List</option><option value="tag">Tag</option><option value="all">All tasks</option><option value="selected">Selected RTM tasks</option></select></label>
-<label id="targetWrap">List or tag <select id="target"></select></label></div>
-<div id="selectionPanel" hidden>
-<div class="formrow"><label>RTM browser tab <select id="rtmTab"></select></label><div class="tab-refresh"><button id="refreshTabs" type="button">Refresh tabs</button></div></div>
-<p id="selectionHelp" class="hint">Choose the RTM tab containing your selected tasks. If Preview cannot identify the checked rows, use Inspect selection to generate a private-data-free structural report.</p><div class="actions"><button id="inspectSelection" type="button">Inspect selection</button><button id="copyInspection" type="button" hidden>Copy diagnostic</button></div><pre id="selectionDiagnostic" class="diagnostic" hidden></pre></div>
-<div class="options"><label><input type="checkbox" id="subtasks" checked> Include nested subtasks</label><label><input type="checkbox" id="completed"> Include completed tasks</label></div></section>
+<!-- Keep the List/Tag controls and all three checkboxes in fixed positions. -->
+<section>
+  <h2>1. Select tasks</h2>
+
+  <div id="sourceControls" class="formrow">
+    <label>Source
+      <select id="scope">
+        <option value="list">List</option>
+        <option value="tag">Tag</option>
+      </select>
+    </label>
+    <label id="targetWrap">List or tag
+      <select id="target"></select>
+    </label>
+  </div>
+
+  <!-- Selected task overrides the dropdown, without moving any controls. -->
+  <div class="options">
+    <label><input type="checkbox" id="selectedSource"> Or source = Selected RTM task</label>
+    <label><input type="checkbox" id="subtasks" checked> Include nested subtasks</label>
+    <label><input type="checkbox" id="completed"> Include completed tasks</label>
+  </div>
+
+  <!-- The browser tab controls appear below the options only in selected mode. -->
+  <div id="selectionPanel" hidden>
+    <div class="formrow tab-row">
+      <label>RTM browser tab
+        <select id="rtmTab"></select>
+      </label>
+      <div class="tab-refresh">
+        <button id="refreshTabs" type="button">Refresh tabs</button>
+      </div>
+    </div>
+    <p id="selectionHelp" class="hint">Tick exactly one task in the chosen RTM tab. Nested subtasks are included if enabled. Use Inspect selection if Preview cannot identify the task. The optional diagnostic may include task titles, so review it before sharing.</p>
+    <div class="actions">
+      <button id="inspectSelection" type="button">Inspect selection</button>
+      <button id="copyInspection" type="button" hidden>Copy diagnostic</button>
+    </div>
+    <pre id="selectionDiagnostic" class="diagnostic" hidden></pre>
+  </div>
+</section>
+<!-- Output fields are generated from the FIELDS catalogue in export.js. -->
 <section><div class="between"><h2>2. Fields and order</h2><div class="actions"><button id="allFields" class="quiet">Select all</button><button id="defaults" class="quiet">Defaults</button></div></div><p class="hint">Drag the handle to change the column order. Task hierarchy automatically expands into as many columns as needed.</p><div id="fields" class="fields"></div></section>
-<section><h2>3. Format</h2><label>Download format <select id="format"><option value="tsv">Tab-delimited (TSV)</option><option value="csv">Comma-delimited (CSV)</option></select></label></section>
+<!-- Download format does not affect Copy, which always uses TSV. -->
+<section><h2>3. Format</h2>
+<div class="formrow">
+<label>Download format <select id="format"><option value="tsv">Tab-delimited (TSV)</option><option value="csv">Comma-delimited (CSV)</option></select></label>
+<label>Date format <select id="dateFormat">
+<option value="dmy">DD/MM/YYYY (UK)</option>
+<option value="mdy">MM/DD/YYYY (US)</option>
+<option value="iso">YYYY-MM-DD (ISO 8601)</option>
+<option value="dmy-dot">DD.MM.YYYY (European)</option>
+</select></label>
+</div>
+<p class="hint">Date formats apply to all date columns. Timestamps use your browser's local timezone.</p></section>
+<!-- Preview displays ten rows; Copy and Download use the complete table. -->
 <section><div class="between"><h2>4. Preview</h2><div class="actions"><button id="preview" class="primary">Preview</button><button id="copy" disabled>Copy TSV</button><button id="download" disabled>Download</button></div></div>
 <p id="status" role="status">Connect to RTM to begin.</p><div id="summary" class="hint"></div><div id="previewWrap" class="preview"><table><thead id="head"></thead><tbody id="rows"></tbody></table></div></section>
 <footer>RTM Export Builder is not affiliated with Remember The Milk. This tool is read-only.</footer></main><script type="module" src="export.js"></script></body></html>

@@ -1,8 +1,22 @@
-// RTM Export Builder. Read-only API and local spreadsheet generation.
+/**
+ * RTM Export Builder: read-only Chrome extension for exporting task data.
+ *
+ * Data flow:
+ *  1. Resolve the chosen source (List, Tag or one selected RTM task).
+ *  2. Read task records using the signed RTM API client in rtm.js.
+ *  3. Normalise series/task instances with composite identities.
+ *  4. Walk nested subtasks and build the requested output columns.
+ *  5. Preview the result or export the complete CSV/TSV data.
+ *
+ * Important: RTM's web-app checkbox selection is not available through
+ * its public API. This extension reads the chosen tab's DOM and then tries
+ * to resolve the selected task from API data. Ambiguous matches must fail.
+ */
 import { startAuthorisation, finishAuthorisation, getLists, getTags, getTasksForList, call } from './rtm.js';
 
 const $ = id => document.getElementById(id);
 const asArray = value => value == null ? [] : Array.isArray(value) ? value : [value];
+// Catalogue and initial order of supported spreadsheet columns.
 const FIELDS = [
   ['hierarchy','Task hierarchy'],['list','List'],['due','Due date'],['priority','Priority'],
   ['status','Status'],['tags','Tags'],['start','Start date'],['completed','Completed date'],
@@ -11,18 +25,60 @@ const FIELDS = [
   ['notes','Notes'],['noteCount','Note count'],['url','Task URL'],
   ['taskId','Task ID'],['parentId','Parent task ID'],['level','Hierarchy level (0 = root)']
 ];
+// Initially enabled columns for a new installation.
 const DEFAULT_FIELDS = ['hierarchy','list','due','priority','status','tags'];
+// In-memory export state. Only options and credentials use Chrome storage.
 const state = { lists: [], tags: [], fields: FIELDS.map(([id,label]) => ({ id,label,enabled:DEFAULT_FIELDS.includes(id) })),
-  records: null, output: null, dragging: null, selectedIds: [], selectedRows: [] };
+  records: null, output: null, dragging: null, selectedKey: '', selectedRow: null };
 
+/**
+ * Show a status message in the Preview section.
+ * @param {string} text Message displayed to the user.
+ */
 function message(text) { $('status').textContent = text; }
+// The selected task checkbox overrides the List/Tag source dropdown.
+/**
+ * Return the effective export source. The selected-task checkbox overrides List/Tag without changing the dropdown.
+ * @returns {'list'|'tag'|'selected'} Effective export source.
+ */
+function sourceMode() { return $('selectedSource').checked ? 'selected' : $('scope').value; }
+/**
+ * Read the existing API key, shared secret and token from local extension storage.
+ * @returns {Promise<object>} Credentials or an object with missing values.
+ */
 async function credentials() { return chrome.storage.local.get(['apiKey','secret','token','username']); }
+/**
+ * Choose a sensible initial date format using the browser's region.
+ *
+ * Returning ISO for unrecognised regions avoids an ambiguous numeric date.
+ * Existing installations retain their previous day/month/year output until
+ * the user explicitly changes the format.
+ *
+ * @returns {'dmy'|'mdy'|'iso'|'dmy-dot'} Initial date convention.
+ */
+function browserDateFormat() {
+  const region=Intl.DateTimeFormat().resolvedOptions().locale
+    .toUpperCase().split('-').slice(-1)[0];
+  if(['US','PH'].includes(region))return 'mdy';
+  if(['DE','AT','CH'].includes(region))return 'dmy-dot';
+  if(['GB','IE','AU','NZ','ZA','IN'].includes(region))return 'dmy';
+  return 'iso';
+}
+/**
+ * Save field order and UI options, but never save credentials in preferences.
+ */
 async function savePreferences() {
   await chrome.storage.local.set({ exportPreferences: {
     fields: state.fields.map(({id,enabled}) => ({id,enabled})),
-    scope:$('scope').value, subtasks:$('subtasks').checked, completed:$('completed').checked, format:$('format').value
+    scope:$('scope').value, selectedSource:$('selectedSource').checked,
+    subtasks:$('subtasks').checked, completed:$('completed').checked,
+    format:$('format').value, dateFormat:$('dateFormat').value
   } });
 }
+/**
+ * Restore known fields in saved order. Preserve newly added fields and ignore old unknown IDs.
+ * @param {Array<{id:string,enabled:boolean}>} saved Stored field choices.
+ */
 function restoreFields(saved) {
   if (!Array.isArray(saved)) return;
   const map = new Map(state.fields.map(item => [item.id,item]));
@@ -33,6 +89,9 @@ function restoreFields(saved) {
   }
   state.fields = [...ordered,...map.values()];
 }
+/**
+ * Invalidate the prepared output when source options or field selection change. Prevent copying stale data.
+ */
 function markStale() {
   state.output = null;
   $('copy').disabled = true;
@@ -43,6 +102,9 @@ function markStale() {
   message('Settings changed. Select Preview to prepare the export.');
   savePreferences().catch(error => message(error.message));
 }
+/**
+ * Render selectable, draggable export fields. Dragging changes export column order, never RTM data.
+ */
 function renderFields() {
   $('fields').replaceChildren();
   for (const field of state.fields) {
@@ -67,9 +129,15 @@ function renderFields() {
     $('fields').append(row);
   }
 }
+/**
+ * Show the controls for the active source. Selected mode requires an explicitly chosen RTM browser tab.
+ */
 function updateTargets() {
-  const scope=$('scope').value;
-  $('targetWrap').hidden = scope==='all'||scope==='selected';
+  const scope=sourceMode();
+  // Keep the dropdowns visible in both modes to avoid shifting the
+  // checkbox row. Disable them when the selected-task override is active.
+  $('scope').disabled = scope==='selected';
+  $('target').disabled = scope==='selected';
   $('selectionPanel').hidden = scope!=='selected';
   if (scope==='selected') refreshTabs().catch(error => message('Cannot list RTM tabs: '+error.message));
   const choices=scope==='tag' ? state.tags.map(tag=>({id:tag,name:tag})) : state.lists;
@@ -81,6 +149,9 @@ function updateTargets() {
   }
   if(choices.some(item=>String(item.id)===old)) $('target').value=old;
 }
+/**
+ * After read-only authorisation, load RTM regular lists and tag names for the source controls.
+ */
 async function loadLists() {
   const auth=await credentials();
   if(!auth.token) { $('setup').hidden=false;$('connected').hidden=true;message('Connect to RTM to begin.');return; }
@@ -90,27 +161,81 @@ async function loadLists() {
   updateTargets();
   message('Ready to preview.');
 }
+/**
+ * Convert RTM's single-object or array tag response into an array of tag names.
+ * @param {unknown} value Tags field from an RTM response.
+ * @returns {string[]} Normalised names.
+ */
 function normaliseTags(value) {
   return asArray(value).map(tag=>typeof tag==='string'?tag:tag?.name||tag?._content||'').filter(Boolean);
 }
+/**
+ * Extract text from a note in the current RTM JSON representation or supported legacy variants.
+ * @param {unknown} note RTM note object or string.
+ * @returns {string} Note content.
+ */
 function plainNote(note) {
   if (typeof note === 'string') return note;
   // RTM JSON uses content. Retain compatibility with other known serialisations.
   const value=note?.content??note?._content??note?.text??note?.['$t']??'';
   return typeof value === 'string' ? value : String(value ?? '');
 }
-function ukDate(value) {
+/**
+ * Format an RTM date according to the user's selected display convention.
+ *
+ * A YYYY-MM-DD date-only value is a calendar date and must not shift with
+ * timezone conversion. Timestamps are displayed in the browser's local
+ * timezone, rather than always using Europe/London.
+ *
+ * @param {string} value RTM date-only string or ISO timestamp.
+ * @param {'dmy'|'mdy'|'iso'|'dmy-dot'} format Selected date convention.
+ * @returns {string} Date without time, or the source string if invalid.
+ */
+function formatDate(value, format) {
   if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+  const input=String(value);
+  let parts;
+
+  // Date-only strings have no timezone. Preserve their calendar components.
+  const dateOnly=/^(\d{4})-(\d{2})-(\d{2})$/.exec(input);
+  if(dateOnly){
+    const date=new Date(input+'T00:00:00Z');
+    if(Number.isNaN(date.getTime()) || date.toISOString().slice(0,10)!==input) return input;
+    parts={year:dateOnly[1],month:dateOnly[2],day:dateOnly[3]};
+  } else {
+    const date=new Date(input);
+    if(Number.isNaN(date.getTime()))return input;
+    const values=new Intl.DateTimeFormat('en-GB',{
+      year:'numeric',month:'2-digit',day:'2-digit'
+    }).formatToParts(date);
+    parts=Object.fromEntries(values.map(part=>[part.type,part.value]));
+  }
+
+  switch(format){
+    case 'mdy':return parts.month+'/'+parts.day+'/'+parts.year;
+    case 'iso':return parts.year+'-'+parts.month+'-'+parts.day;
+    case 'dmy-dot':return parts.day+'.'+parts.month+'.'+parts.year;
+    default:return parts.day+'/'+parts.month+'/'+parts.year;
+  }
 }
+/**
+ * Map RTM's empty-priority markers (N or 0) to the word None.
+ * @param {unknown} value Raw RTM priority.
+ * @returns {string} Displayable priority.
+ */
 function taskPriority(value) {
   const text=String(value??'').trim();
   return text === 'N' || text === '0' ? 'None' : text;
 }
+/**
+ * Flatten the RTM list/series/task hierarchy. Each task instance receives a composite list:series:task key to distinguish duplicates and recurring occurrences.
+ * @param {object} response Response from rtm.tasks.getList.
+ * @param {Map<string,string>} names List IDs mapped to display names.
+ * @returns {object[]} Task-instance records carrying composite keys.
+ */
 function normaliseResponse(response, names) {
   const rows=[];const seen=new Set();
+  // RTM returns one object instead of an array when there is only one item.
   for(const list of asArray(response.tasks?.list)){
     const listId=String(list.id||'');
     for(const series of asArray(list.taskseries)){
@@ -137,6 +262,9 @@ function normaliseResponse(response, names) {
   return rows;
 }
 // A user must explicitly identify the RTM tab whose selection should be exported.
+/**
+ * Refresh open RTM application tabs without guessing which tab the user wants to export.
+ */
 async function refreshTabs() {
   const old = $('rtmTab').value;
   const tabs = await chrome.tabs.query({url:'https://www.rememberthemilk.com/*'});
@@ -159,6 +287,10 @@ async function refreshTabs() {
 }
 // Inspect selected checkbox structure without returning task names or other private content.
 // Only tag names, class names and attribute *names* are returned.
+/**
+ * Create an opt-in HTML selection diagnostic. The appended candidate fragments may contain private task titles and must be reviewed before sharing.
+ * @returns {Promise<string>} Diagnostic JSON for on-screen review.
+ */
 async function inspectSelection() {
   const tabId = Number($('rtmTab').value);
   if (!Number.isSafeInteger(tabId) || tabId <= 0) throw new Error('Choose an RTM tab first.');
@@ -204,15 +336,35 @@ async function inspectSelection() {
     return {checkedCheckboxes:checked.length,uncheckedCheckboxes:unchecked.length,
       note:'No task titles, ID values or note text are included.',counts,structure};
   }});
-  return JSON.stringify(result[0]?.result||{},null,2);
+  const report=result[0]?.result||{};
+  // Explicit diagnostic only. The report includes selected row text, which
+  // can contain private task titles. Never send or copy it automatically.
+  const rows=await selectedTaskRows();
+  report.selectionCandidates=rows.map((row,index)=>{
+    const fragments=row.exactTexts
+      .map(value=>String(value).replace(/\\s+/g,' ').trim())
+      .filter(value=>value.length>=4&&value.length<=250)
+      .sort((a,b)=>b.length-a.length);
+    return {
+      row:index+1,
+      fragments:row.exactTexts.slice(0,20),
+      lookupHint:fragments[0]||null,
+      hintMatchesOneFragment:fragments.includes(fragments[0])
+    };
+  });
+  report.privacy='Selected task titles and row text may be included. Review before sharing.';
+  return JSON.stringify(report,null,2);
 }
+/**
+ * Display a diagnostic only when requested, and offer copying without automatic transmission.
+ */
 async function runSelectionInspection() {
   try {
     const report=await inspectSelection();
     $('selectionDiagnostic').textContent=report;
     $('selectionDiagnostic').hidden=false;
     $('copyInspection').hidden=false;
-    message('Checkbox structure captured. No task titles or task contents are included.');
+    message('Diagnostic captured. Review selected task titles before copying or sharing.');
   } catch(error) {
     message('Selection inspection failed: '+error.message);
   }
@@ -220,6 +372,11 @@ async function runSelectionInspection() {
 // RTM uses checked custom controls inside selected task rows, not data-task-id.
 // Capture row text locally, then match task names against the RTM API response.
 // Ambiguous or unmatched rows are rejected. Never export a guessed task.
+/**
+ * Read exactly one checked RTM task row from the chosen tab. The DOM row ID is NOT an RTM API task ID. Reject zero or multiple checked rows.
+ * @returns {Promise<{text:string,exactTexts:string[]}>} One checked row.
+ * @throws {Error} When no tab or not exactly one selected task exists.
+ */
 async function selectedTaskRows() {
   const tabId=Number($('rtmTab').value);
   if (!Number.isSafeInteger(tabId) || tabId <= 0) {
@@ -255,48 +412,50 @@ async function selectedTaskRows() {
     return {checked:boxes.length,rows};
   }});
   const selection=injected[0]?.result;
-  if(!selection?.rows?.length)throw new Error('No selected RTM task rows were found in the chosen tab.');
-  if(selection.rows.length!==selection.checked) {
-    throw new Error('Some checked controls were not recognised as task rows. Selection is ambiguous.');
+  if(selection?.checked!==1 || selection.rows?.length!==1) {
+    throw new Error('Select exactly one RTM task, not '+(selection?.checked??0)+'.');
   }
-  return selection.rows;
+  return selection.rows[0];
 }
-function matchSelectedTasks(selection,records) {
-  const ids=[];
+// Resolve exactly one checked RTM task to one complete task identity.
+// Never assume a title is unique across lists or recurring instances.
+/**
+ * Resolve one selected row to an unambiguous composite API task key. Refuse missing or duplicate titles instead of guessing.
+ * @param {{exactTexts:string[]}} chosen Checked RTM row.
+ * @param {object[]} records Candidate RTM API task instances.
+ * @returns {string} Composite identity of the uniquely matched task.
+ * @throws {Error} When matching is missing or ambiguous.
+ */
+function matchSelectedTask(chosen,records) {
   const normalise=value=>String(value||'').replace(/\s+/g,' ').trim();
-  for(const [index,chosen] of selection.entries()){
-    const fragments=new Set(chosen.exactTexts.map(normalise).filter(Boolean));
-    // Only match complete task titles to direct text nodes from the checked
-    // row. Never match an API title to a prefix of another title or to a
-    // whole row containing dates, tags and interface labels.
-    let matches=records.filter(record=>fragments.has(normalise(record.name)));
-    if(matches.length){
-      const longest=Math.max(...matches.map(row=>normalise(row.name).length));
-      matches=matches.filter(row=>normalise(row.name).length===longest);
-    }
-    const unique=new Map();
-    for(const record of matches)if(!unique.has(String(record.id)))unique.set(String(record.id),record);
-    matches=[...unique.values()];
-    if(matches.length>1){
-      const incomplete=matches.filter(row=>!row.completed);
-      if(incomplete.length===1)matches=incomplete;
-    }
-    if(matches.length!==1){
-      const detail=matches.length
-        ? matches.length+' task IDs, '+matches.filter(row=>!row.completed).length+' incomplete'
-        : 'no exact task title found in this row';
-      throw new Error('Selected row '+(index+1)+' of '+selection.length+
-        ': '+detail+'. Export stopped to avoid an incorrect match.');
-    }
-    if(ids.includes(matches[0].id)){
-      throw new Error('Selected rows resolved to the same task ID. Export stopped.');
-    }
-    ids.push(matches[0].id);
+  const fragments=new Set(chosen.exactTexts.map(normalise).filter(Boolean));
+  let matches=records.filter(record=>fragments.has(normalise(record.name)));
+  if(matches.length){
+    const longest=Math.max(...matches.map(row=>normalise(row.name).length));
+    matches=matches.filter(row=>normalise(row.name).length===longest);
   }
-  return ids;
+  // Repeated API responses may contain the same composite task record.
+  const unique=new Map(matches.map(row=>[row.key,row]));
+  matches=[...unique.values()];
+  if(matches.length>1){
+    const incomplete=matches.filter(row=>!row.completed);
+    if(incomplete.length===1)matches=incomplete;
+  }
+  if(matches.length!==1){
+    const detail=matches.length
+      ? matches.length+' different task records matched.'
+      : 'The selected task title was not found in the API results.';
+    throw new Error(detail+' Export stopped rather than guessing.');
+  }
+  return matches[0].key;
 }
+/**
+ * Retrieve only the records required by List, Tag or one selected RTM task. Optionally load the matching list to resolve nested subtasks. Abort on API failures.
+ * @param {object} auth Read-only RTM API credentials.
+ * @returns {Promise<object[]>} Normalised RTM records for the source.
+ */
 async function retrieve(auth) {
-  const scope = $('scope').value;
+  const scope = sourceMode();
   const includeCompleted = $('completed').checked;
   const includeChildren = $('subtasks').checked;
   const names = new Map(state.lists.map(list => [String(list.id), list.name]));
@@ -330,37 +489,31 @@ async function retrieve(auth) {
     return results;
   }
 
-  if (scope === 'selected') {
-    state.selectedRows = await selectedTaskRows();
-    // Search by a title fragment from each selected row. Do not retrieve the
-    // entire RTM account merely because two checkboxes are selected.
-    // The API name: operator searches task titles, then local matching checks
-    // exact titles. An incorrect hint causes a clear error, not a wrong export.
-    for (let index=0; index<state.selectedRows.length; index++){
-      const chosen=state.selectedRows[index];
-      const candidates=chosen.exactTexts
-        .map(value=>String(value).replace(/\s+/g,' ').trim())
-        .filter(value=>value.length>=4 && value.length<=250)
-        .sort((a,b)=>b.length-a.length);
-      const hint=candidates[0];
-      if(!hint)throw new Error('Selected row '+(index+1)+' has no readable task title.');
-      const safeHint=hint.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
-      for(const completed of statuses){
-        message('Looking up selected task '+(index+1)+' of '+state.selectedRows.length+'…');
-        results.push(...await fetchStatus({filter:'name:"'+safeHint+'"'},completed));
-      }
+  if(scope==='selected') {
+    state.selectedRow=await selectedTaskRows();
+    // Limitation: the longest visible text fragment is a search hint, not a
+    // verified title selector. The exact-match stage must reject ambiguity.
+    const candidates=state.selectedRow.exactTexts
+      .map(value=>String(value).replace(/\s+/g,' ').trim())
+      .filter(value=>value.length>=4 && value.length<=250)
+      .sort((a,b)=>b.length-a.length);
+    const hint=candidates[0];
+    if(!hint)throw new Error('The selected RTM task has no readable title.');
+    const safeHint=hint.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
+    for(const completed of statuses){
+      message('Looking up the selected RTM task…');
+      results.push(...await fetchStatus({filter:'name:"'+safeHint+'"'},completed));
     }
     const unique=new Map(results.map(row=>[row.key,row]));
-    const records=[...unique.values()];
-    state.selectedIds=matchSelectedTasks(state.selectedRows,records);
-    if(!includeChildren)return records;
+    state.selectedKey=matchSelectedTask(state.selectedRow,[...unique.values()]);
+    if(!includeChildren)return [...unique.values()];
 
-    // Fetch full hierarchy only from lists containing matched tasks.
-    const relevant=new Set(records.filter(row=>state.selectedIds.includes(row.id)).map(row=>row.listId));
-    for(const listId of relevant){
-      message('Loading nested subtasks from selected task list…');
-      for(const completed of statuses){
-        for(const row of await fetchStatus({list_id:listId},completed))unique.set(row.key,row);
+    // Fetch descendants only from the chosen task's list.
+    const chosen=unique.get(state.selectedKey);
+    message('Loading nested subtasks from '+chosen.list+'…');
+    for(const completed of statuses){
+      for(const row of await fetchStatus({list_id:chosen.listId},completed)){
+        unique.set(row.key,row);
       }
     }
     return [...unique.values()];
@@ -391,55 +544,75 @@ async function retrieve(auth) {
     return listResults;
   }
 
-  if (scope === 'all') {
-    for (const completed of statuses) {
-      message('Retrieving all ' + (completed ? 'completed' : 'incomplete') + ' tasks…');
-      results.push(...await fetchStatus({}, completed));
-    }
-    return results;
-  }
 
   throw new Error('Unknown export source.');
 }
+/**
+ * Choose export roots and recursively visit descendants. Parent-child links are scoped to the same RTM list and visited records are exported once.
+ * @param {object[]} records Normalised RTM task records.
+ * @returns {object[]} Task records annotated with hierarchy level.
+ */
 function selectRows(records) {
-  const scope=$('scope').value, includeChildren=$('subtasks').checked;
-  const byId=new Map(), children=new Map();
+  const scope=sourceMode();
+  const includeChildren=$('subtasks').checked;
+  const selectedKey=state.selectedKey;
+  const byScopedId=new Map();
+  const children=new Map();
+
+  // RTM task identity includes its list. A parent ID in another list
+  // must never be treated as the parent of this task.
+  const scopedId=row=>row.listId+':'+row.id;
+  const scopedParent=row=>row.listId+':'+row.parentId;
   for(const row of records){
-    if(!byId.has(row.id))byId.set(row.id,row);
-    if(!children.has(row.parentId))children.set(row.parentId,[]);
-    children.get(row.parentId).push(row);
+    if(!byScopedId.has(scopedId(row)))byScopedId.set(scopedId(row),row);
+    if(row.parentId){
+      const parent=scopedParent(row);
+      if(!children.has(parent))children.set(parent,[]);
+      children.get(parent).push(row);
+    }
   }
-  const isMatch=row=>scope==='all'||scope==='list'||
+  const isMatch=row=>scope==='list'||
     (scope==='tag'&&row.tags.some(t=>t.toLowerCase()===$('target').value.toLowerCase()))||
-    (scope==='selected'&&state.selectedIds.includes(row.id));
+    (scope==='selected'&&selectedKey===row.key);
   const matched=records.filter(isMatch);
+
   const output=[],visited=new Set();
   function visit(row,level) {
     if(visited.has(row.key))return;
-    visited.add(row.key);output.push({...row,level});
-    if(includeChildren)for(const child of children.get(row.id)||[])visit(child,level+1);
+    visited.add(row.key);
+    output.push({...row,level});
+    if(includeChildren){
+      for(const child of children.get(scopedId(row))||[])visit(child,level+1);
+    }
   }
-  // A matching descendant of a matching ancestor belongs to that ancestor's subtree.
+  // Start from matching roots so a selected parent and child are not
+  // exported twice. Then walk each subtree in its original response order.
   const matching=new Set(matched.map(row=>row.key));
   for(const row of matched){
-    let parent=row.parentId,hasSelectedAncestor=false;
+    let parent=scopedParent(row),hasSelectedAncestor=false;
     const guard=new Set();
-    while(parent&&byId.has(parent)&&!guard.has(parent)){
+    while(row.parentId&&byScopedId.has(parent)&&!guard.has(parent)){
       guard.add(parent);
-      const ancestor=byId.get(parent);
+      const ancestor=byScopedId.get(parent);
       if(matching.has(ancestor.key)){hasSelectedAncestor=true;break;}
-      parent=ancestor.parentId;
+      if(!ancestor.parentId)break;
+      parent=scopedParent(ancestor);
     }
     if(!hasSelectedAncestor || !includeChildren)visit(row,0);
   }
-  // Missing filtered ancestors may cause an otherwise matched task to be unvisited.
   for(const row of matched)if(!visited.has(row.key))visit(row,0);
   return output;
 }
+/**
+ * Translate ordered export fields into column names and text cells. Hierarchy columns expand to the deepest included task level.
+ * @param {object[]} rows Selected task rows with hierarchy level.
+ * @returns {{headings:string[],values:string[][],depth:number}} Table data.
+ */
 function headersAndValues(rows) {
   const fields=state.fields.filter(field=>field.enabled);
   if(!fields.length)throw new Error('Select at least one field.');
   const depth=rows.reduce((n,row)=>Math.max(n,row.level),0);
+  // Build one accessor per output column, then apply it to each task row.
   const headings=[],accessors=[];
   for(const field of fields){
     if(field.id==='hierarchy'){
@@ -458,8 +631,8 @@ function headersAndValues(rows) {
           case 'taskId':return row.id;
           case 'parentId':return row.parentId;
           case 'level':return String(row.level);
-          case 'completed':return ukDate(row.completedAt);
-          case 'due':case 'start':case 'created':case 'modified':return ukDate(row[field.id]);
+          case 'completed':return formatDate(row.completedAt,$('dateFormat').value);
+          case 'due':case 'start':case 'created':case 'modified':return formatDate(row[field.id],$('dateFormat').value);
           default:return row[field.id]??'';
         }
       });
@@ -469,10 +642,22 @@ function headersAndValues(rows) {
 }
 // Spreadsheet applications may interpret leading formula characters as expressions.
 // Prefix a single quote to force text, including when leading whitespace precedes it.
+/**
+ * Prevent spreadsheet formula execution by prefixing formula-like cell values with an apostrophe.
+ * @param {unknown} value User-controlled cell data.
+ * @returns {string} Text safe to open in spreadsheet software.
+ */
 function safeCell(value) {
   const text=String(value??'');
   return /^[\s\uFEFF]*[=+@\-]/.test(text)?"'"+text:text;
 }
+/**
+ * Create complete CSV or TSV with quoted delimiters, doubled quotes and CRLF row endings.
+ * @param {string[]} headings Column titles.
+ * @param {string[][]} rows Export cell values.
+ * @param {'csv'|'tsv'} format Target format.
+ * @returns {string} Quoted output with CRLF line endings.
+ */
 function serialise(headings,rows,format) {
   const delimiter=format==='csv'?',':'\t';
   function escape(value) {
@@ -483,6 +668,10 @@ function serialise(headings,rows,format) {
   }
   return [headings,...rows].map(row=>row.map(escape).join(delimiter)).join('\r\n')+'\r\n';
 }
+/**
+ * Render a ten-row preview. The complete export remains in memory for copying or downloading.
+ * @param {{headings:string[],values:string[][],depth:number}} output Table data.
+ */
 function renderPreview(output) {
   $('head').replaceChildren();$('rows').replaceChildren();
   const header=document.createElement('tr');
@@ -495,6 +684,9 @@ function renderPreview(output) {
   }
   $('summary').textContent=output.values.length+' tasks · '+output.headings.length+' columns · deepest subtask level '+output.depth+' · showing up to 10 rows.';
 }
+/**
+ * Fetch, select and format tasks, then enable Copy and Download only on full success.
+ */
 async function preview() {
   if(state.running)return;state.running=true;
   $('preview').disabled=true;$('copy').disabled=true;$('download').disabled=true;
@@ -516,15 +708,22 @@ async function preview() {
   }catch(error){message('Export could not be prepared: '+error.message);}
   finally{state.running=false;$('preview').disabled=false;}
 }
+/**
+ * Copy the complete prepared table as TSV, irrespective of the chosen download format.
+ */
 async function copy() {
   if(!state.output)return;
   try{await navigator.clipboard.writeText(serialise(state.output.headings,state.output.values,'tsv'));message('Copied full tab-delimited export to clipboard.');}
   catch(error){message('Clipboard failed: '+error.message);}
 }
+/**
+ * Download the entire table with UTF-8 BOM. Revoke the temporary object URL afterwards.
+ */
 async function download(){
   if(!state.output)return;
   try{
     const format=$('format').value;
+    // Include the UTF-8 BOM so spreadsheet software detects text correctly.
     const body='\uFEFF'+serialise(state.output.headings,state.output.values,format);
     const blob=new Blob([body],{type:'text/plain;charset=utf-8'});
     const url=URL.createObjectURL(blob);
@@ -534,6 +733,9 @@ async function download(){
     message('Download requested: '+name);
   }catch(error){message('Download failed: '+error.message);}
 }
+/**
+ * Begin read-only RTM authorisation. Hold pending credentials and the frob in session storage.
+ */
 async function connectStart() {
   try {
     const auth={apiKey:$('apiKey').value.trim(),secret:$('secret').value.trim()};
@@ -543,6 +745,9 @@ async function connectStart() {
     chrome.tabs.create({url:pending.url});message('Approve read-only access in RTM, then return here and click I’ve authorised access.');
   }catch(error){message(error.message);}
 }
+/**
+ * Exchange the authorised frob for a token, store credentials locally and refresh source choices.
+ */
 async function connectFinish(){
   try{
     const stored=await chrome.storage.session.get('pendingExportConnection');
@@ -553,14 +758,25 @@ async function connectFinish(){
     await chrome.storage.session.remove('pendingExportConnection');await loadLists();
   }catch(error){message(error.message);}
 }
+/**
+ * Restore preferences, migrate old selected-source settings, connect controls and initialise the RTM session.
+ */
 async function init(){
   const stored=await chrome.storage.local.get('exportPreferences');
   const pref=stored.exportPreferences||{};
   restoreFields(pref.fields);
-  $('scope').value=pref.scope||'list';$('subtasks').checked=pref.subtasks!==false;
+  $('scope').value=['list','tag'].includes(pref.scope)?pref.scope:'list';
+  $('selectedSource').checked=pref.selectedSource===true || (pref.selectedSource===undefined && pref.scope==='selected');
+  $('subtasks').checked=pref.subtasks!==false;
   $('completed').checked=Boolean(pref.completed);$('format').value=pref.format||'tsv';
+  // Preserve the prior UK convention for existing saved preferences.
+  // Fresh installations use the browser's region, with ISO as a fallback.
+  const initialDateFormat=stored.exportPreferences?'dmy':browserDateFormat();
+  $('dateFormat').value=['dmy','mdy','iso','dmy-dot'].includes(pref.dateFormat)
+    ?pref.dateFormat:initialDateFormat;
   renderFields();
   $('scope').addEventListener('change',()=>{updateTargets();markStale();});
+  $('selectedSource').addEventListener('change',()=>{updateTargets();markStale();});
   $('refreshTabs').addEventListener('click',()=>refreshTabs().catch(error=>message(error.message)));
   $('rtmTab').addEventListener('change',markStale);
   $('inspectSelection').addEventListener('click',runSelectionInspection);
@@ -568,7 +784,7 @@ async function init(){
     try{await navigator.clipboard.writeText($('selectionDiagnostic').textContent);message('Structural diagnostic copied.');}
     catch(error){message('Could not copy diagnostic: '+error.message);}
   });
-  for(const id of ['target','subtasks','completed','format'])$(id).addEventListener('change',markStale);
+  for(const id of ['target','subtasks','completed','format','dateFormat'])$(id).addEventListener('change',markStale);
   $('allFields').addEventListener('click',()=>{state.fields.forEach(field=>field.enabled=true);renderFields();markStale();});
   $('defaults').addEventListener('click',()=>{state.fields=FIELDS.map(([id,label])=>({id,label,enabled:DEFAULT_FIELDS.includes(id)}));renderFields();markStale();});
   $('authorise').addEventListener('click',connectStart);
