@@ -33,15 +33,18 @@ const state = { lists: [], tags: [], fields: FIELDS.map(([id,label]) => ({ id,la
 
 /**
  * Show a status message in the Preview section.
+ * @param {string} text Message displayed to the user.
  */
 function message(text) { $('status').textContent = text; }
 // The selected task checkbox overrides the List/Tag source dropdown.
 /**
  * Return the effective export source. The selected-task checkbox overrides List/Tag without changing the dropdown.
+ * @returns {'list'|'tag'|'selected'} Effective export source.
  */
 function sourceMode() { return $('selectedSource').checked ? 'selected' : $('scope').value; }
 /**
  * Read the existing API key, shared secret and token from local extension storage.
+ * @returns {Promise<object>} Credentials or an object with missing values.
  */
 async function credentials() { return chrome.storage.local.get(['apiKey','secret','token','username']); }
 /**
@@ -56,6 +59,7 @@ async function savePreferences() {
 }
 /**
  * Restore known fields in saved order. Preserve newly added fields and ignore old unknown IDs.
+ * @param {Array<{id:string,enabled:boolean}>} saved Stored field choices.
  */
 function restoreFields(saved) {
   if (!Array.isArray(saved)) return;
@@ -138,12 +142,16 @@ async function loadLists() {
 }
 /**
  * Convert RTM's single-object or array tag response into an array of tag names.
+ * @param {unknown} value Tags field from an RTM response.
+ * @returns {string[]} Normalised names.
  */
 function normaliseTags(value) {
   return asArray(value).map(tag=>typeof tag==='string'?tag:tag?.name||tag?._content||'').filter(Boolean);
 }
 /**
  * Extract text from a note in the current RTM JSON representation or supported legacy variants.
+ * @param {unknown} note RTM note object or string.
+ * @returns {string} Note content.
  */
 function plainNote(note) {
   if (typeof note === 'string') return note;
@@ -153,6 +161,8 @@ function plainNote(note) {
 }
 /**
  * Format an RTM date as DD/MM/YYYY in Europe/London, accounting for daylight-saving dates.
+ * @param {string} value RTM date/time string.
+ * @returns {string} British calendar date or the original invalid value.
  */
 function ukDate(value) {
   if (!value) return '';
@@ -162,6 +172,8 @@ function ukDate(value) {
 }
 /**
  * Map RTM's empty-priority markers (N or 0) to the word None.
+ * @param {unknown} value Raw RTM priority.
+ * @returns {string} Displayable priority.
  */
 function taskPriority(value) {
   const text=String(value??'').trim();
@@ -169,6 +181,9 @@ function taskPriority(value) {
 }
 /**
  * Flatten the RTM list/series/task hierarchy. Each task instance receives a composite list:series:task key to distinguish duplicates and recurring occurrences.
+ * @param {object} response Response from rtm.tasks.getList.
+ * @param {Map<string,string>} names List IDs mapped to display names.
+ * @returns {object[]} Task-instance records carrying composite keys.
  */
 function normaliseResponse(response, names) {
   const rows=[];const seen=new Set();
@@ -226,6 +241,7 @@ async function refreshTabs() {
 // Only tag names, class names and attribute *names* are returned.
 /**
  * Create an opt-in HTML selection diagnostic. The appended candidate fragments may contain private task titles and must be reviewed before sharing.
+ * @returns {Promise<string>} Diagnostic JSON for on-screen review.
  */
 async function inspectSelection() {
   const tabId = Number($('rtmTab').value);
@@ -310,6 +326,8 @@ async function runSelectionInspection() {
 // Ambiguous or unmatched rows are rejected. Never export a guessed task.
 /**
  * Read exactly one checked RTM task row from the chosen tab. The DOM row ID is NOT an RTM API task ID. Reject zero or multiple checked rows.
+ * @returns {Promise<{text:string,exactTexts:string[]}>} One checked row.
+ * @throws {Error} When no tab or not exactly one selected task exists.
  */
 async function selectedTaskRows() {
   const tabId=Number($('rtmTab').value);
@@ -355,6 +373,10 @@ async function selectedTaskRows() {
 // Never assume a title is unique across lists or recurring instances.
 /**
  * Resolve one selected row to an unambiguous composite API task key. Refuse missing or duplicate titles instead of guessing.
+ * @param {{exactTexts:string[]}} chosen Checked RTM row.
+ * @param {object[]} records Candidate RTM API task instances.
+ * @returns {string} Composite identity of the uniquely matched task.
+ * @throws {Error} When matching is missing or ambiguous.
  */
 function matchSelectedTask(chosen,records) {
   const normalise=value=>String(value||'').replace(/\s+/g,' ').trim();
@@ -381,6 +403,8 @@ function matchSelectedTask(chosen,records) {
 }
 /**
  * Retrieve only the records required by List, Tag or one selected RTM task. Optionally load the matching list to resolve nested subtasks. Abort on API failures.
+ * @param {object} auth Read-only RTM API credentials.
+ * @returns {Promise<object[]>} Normalised RTM records for the source.
  */
 async function retrieve(auth) {
   const scope = sourceMode();
@@ -477,6 +501,8 @@ async function retrieve(auth) {
 }
 /**
  * Choose export roots and recursively visit descendants. Parent-child links are scoped to the same RTM list and visited records are exported once.
+ * @param {object[]} records Normalised RTM task records.
+ * @returns {object[]} Task records annotated with hierarchy level.
  */
 function selectRows(records) {
   const scope=sourceMode();
@@ -531,6 +557,8 @@ function selectRows(records) {
 }
 /**
  * Translate ordered export fields into column names and text cells. Hierarchy columns expand to the deepest included task level.
+ * @param {object[]} rows Selected task rows with hierarchy level.
+ * @returns {{headings:string[],values:string[][],depth:number}} Table data.
  */
 function headersAndValues(rows) {
   const fields=state.fields.filter(field=>field.enabled);
@@ -568,6 +596,8 @@ function headersAndValues(rows) {
 // Prefix a single quote to force text, including when leading whitespace precedes it.
 /**
  * Prevent spreadsheet formula execution by prefixing formula-like cell values with an apostrophe.
+ * @param {unknown} value User-controlled cell data.
+ * @returns {string} Text safe to open in spreadsheet software.
  */
 function safeCell(value) {
   const text=String(value??'');
@@ -575,6 +605,10 @@ function safeCell(value) {
 }
 /**
  * Create complete CSV or TSV with quoted delimiters, doubled quotes and CRLF row endings.
+ * @param {string[]} headings Column titles.
+ * @param {string[][]} rows Export cell values.
+ * @param {'csv'|'tsv'} format Target format.
+ * @returns {string} Quoted output with CRLF line endings.
  */
 function serialise(headings,rows,format) {
   const delimiter=format==='csv'?',':'\t';
@@ -588,6 +622,7 @@ function serialise(headings,rows,format) {
 }
 /**
  * Render a ten-row preview. The complete export remains in memory for copying or downloading.
+ * @param {{headings:string[],values:string[][],depth:number}} output Table data.
  */
 function renderPreview(output) {
   $('head').replaceChildren();$('rows').replaceChildren();
