@@ -16,11 +16,14 @@ const state = { lists: [], tags: [], fields: FIELDS.map(([id,label]) => ({ id,la
   records: null, output: null, dragging: null, selectedKey: '', selectedRow: null };
 
 function message(text) { $('status').textContent = text; }
+// The selected task checkbox overrides the List/Tag source dropdown.
+function sourceMode() { return $('selectedSource').checked ? 'selected' : $('scope').value; }
 async function credentials() { return chrome.storage.local.get(['apiKey','secret','token','username']); }
 async function savePreferences() {
   await chrome.storage.local.set({ exportPreferences: {
     fields: state.fields.map(({id,enabled}) => ({id,enabled})),
-    scope:$('scope').value, subtasks:$('subtasks').checked, completed:$('completed').checked, format:$('format').value
+    scope:$('scope').value, selectedSource:$('selectedSource').checked,
+    subtasks:$('subtasks').checked, completed:$('completed').checked, format:$('format').value
   } });
 }
 function restoreFields(saved) {
@@ -68,8 +71,8 @@ function renderFields() {
   }
 }
 function updateTargets() {
-  const scope=$('scope').value;
-  $('targetWrap').hidden = scope==='selected';
+  const scope=sourceMode();
+  $('sourceControls').hidden = scope==='selected';
   $('selectionPanel').hidden = scope!=='selected';
   if (scope==='selected') refreshTabs().catch(error => message('Cannot list RTM tabs: '+error.message));
   const choices=scope==='tag' ? state.tags.map(tag=>({id:tag,name:tag})) : state.lists;
@@ -302,7 +305,7 @@ function matchSelectedTask(chosen,records) {
   return matches[0].key;
 }
 async function retrieve(auth) {
-  const scope = $('scope').value;
+  const scope = sourceMode();
   const includeCompleted = $('completed').checked;
   const includeChildren = $('subtasks').checked;
   const names = new Map(state.lists.map(list => [String(list.id), list.name]));
@@ -393,7 +396,7 @@ async function retrieve(auth) {
   throw new Error('Unknown export source.');
 }
 function selectRows(records) {
-  const scope=$('scope').value;
+  const scope=sourceMode();
   const includeChildren=$('subtasks').checked;
   const selectedKey=state.selectedKey;
   const byScopedId=new Map();
@@ -562,10 +565,13 @@ async function init(){
   const stored=await chrome.storage.local.get('exportPreferences');
   const pref=stored.exportPreferences||{};
   restoreFields(pref.fields);
-  $('scope').value=['list','tag','selected'].includes(pref.scope)?pref.scope:'list';$('subtasks').checked=pref.subtasks!==false;
+  $('scope').value=['list','tag'].includes(pref.scope)?pref.scope:'list';
+  $('selectedSource').checked=pref.selectedSource===true || (pref.selectedSource===undefined && pref.scope==='selected');
+  $('subtasks').checked=pref.subtasks!==false;
   $('completed').checked=Boolean(pref.completed);$('format').value=pref.format||'tsv';
   renderFields();
   $('scope').addEventListener('change',()=>{updateTargets();markStale();});
+  $('selectedSource').addEventListener('change',()=>{updateTargets();markStale();});
   $('refreshTabs').addEventListener('click',()=>refreshTabs().catch(error=>message(error.message)));
   $('rtmTab').addEventListener('change',markStale);
   $('inspectSelection').addEventListener('click',runSelectionInspection);
