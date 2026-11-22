@@ -106,7 +106,7 @@ The list and tag sources can still export several tasks because those sources re
 
 ## Selected RTM task checkbox (experimental 0.2.2)
 
-The Source dropdown contains **List** and **Tag** only. Beneath it, a separate **Or source = Selected RTM task** checkbox makes a single checked RTM task the export source. When checked, the List/Tag controls are hidden and the RTM browser tab selector is shown. Unchecking restores the previous List/Tag choice. This setting is saved between uses. **Include nested subtasks** and **Include completed tasks** remain available for all three source modes. A previous saved `scope: selected` setting is migrated to the new checkbox on first load.
+The Source dropdown contains **List** and **Tag** only. Beneath it, a separate **Or source = Selected RTM task** checkbox makes a single checked RTM task the export source. When checked, the List/Tag controls remain in place but are disabled. The RTM browser tab selector appears below the three checkboxes. Unchecking restores the previous List/Tag choice. This setting is saved between uses. **Include nested subtasks** and **Include completed tasks** remain available for all three source modes. A previous saved `scope: selected` setting is migrated to the new checkbox on first load.
 
 ## Configurable date formats
 
