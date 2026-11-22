@@ -134,7 +134,10 @@ function renderFields() {
  */
 function updateTargets() {
   const scope=sourceMode();
-  $('sourceControls').hidden = scope==='selected';
+  // Keep the dropdowns visible in both modes to avoid shifting the
+  // checkbox row. Disable them when the selected-task override is active.
+  $('scope').disabled = scope==='selected';
+  $('target').disabled = scope==='selected';
   $('selectionPanel').hidden = scope!=='selected';
   if (scope==='selected') refreshTabs().catch(error => message('Cannot list RTM tabs: '+error.message));
   const choices=scope==='tag' ? state.tags.map(tag=>({id:tag,name:tag})) : state.lists;
