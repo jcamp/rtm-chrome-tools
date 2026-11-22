@@ -16,7 +16,7 @@ Each extension is independent. API authorisation must be performed separately fo
 
 ## Export workflow
 
-1. Choose a **List**, **Tag**, or **Selected RTM task**. The selected-task option accepts exactly one checked task in the chosen RTM browser tab.
+1. Choose a **List** or **Tag**, or tick **Or source = Selected RTM task** to export exactly one checked task in the chosen RTM browser tab.
 2. Optionally include nested subtasks and completed tasks.
 3. Tick and drag fields to arrange the export columns.
 4. Select CSV or TSV and click **Preview**.
@@ -99,3 +99,7 @@ The Selected RTM tasks mode no longer queries all tasks in the RTM account. It i
 This branch deliberately removes the **All tasks** source and the ability to select multiple RTM root tasks. The available sources are **List**, **Tag**, and **Selected RTM task**. For the selected-task source, exactly one task must be checked in the chosen RTM tab. Its descendants are still exported recursively when **Include nested subtasks** is enabled. Completed tasks remain controlled by the existing checkbox.
 
 The list and tag sources can still export several tasks because those sources represent groups. This branch has not been merged into main. The selected-task title extraction uses the current experimental approach and is not claimed as verified against the live RTM browser interface. The read-only API does not provide an endpoint for asking which checkbox is selected in the web app.
+
+## Selected RTM task checkbox (experimental 0.2.2)
+
+The Source dropdown contains **List** and **Tag** only. Beneath it, a separate **Or source = Selected RTM task** checkbox makes a single checked RTM task the export source. When checked, the List/Tag controls are hidden and the RTM browser tab selector is shown. Unchecking restores the previous List/Tag choice. This setting is saved between uses. **Include nested subtasks** and **Include completed tasks** remain available for all three source modes. A previous saved `scope: selected` setting is migrated to the new checkbox on first load.
